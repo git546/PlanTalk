@@ -1,0 +1,25 @@
+# Environment files
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+backend/.venv/
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.code-workspace.user

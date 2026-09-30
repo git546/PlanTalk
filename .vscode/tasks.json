@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PlanTalk: API",
+      "type": "shell",
+      "command": ".\\scripts\\api.ps1",
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "PlanTalk: Mobile",
+      "type": "shell",
+      "command": "npm --prefix mobile start",
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "PlanTalk: Start All",
+      "dependsOrder": "parallel",
+      "dependsOn": ["PlanTalk: API", "PlanTalk: Mobile"],
+      "problemMatcher": []
+    }
+  ]
+}
