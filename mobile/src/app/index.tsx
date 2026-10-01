@@ -59,7 +59,7 @@ export default function HomeScreen() {
           <Text style={styles.badgeText}>🌱 PlanTalk</Text>
         </View>
 
-        <Text style={styles.title}>식물과 함께 만드는{`\n`}조금 더 따뜻한 하루</Text>
+        <Text style={styles.title}>내 반려식물과 대화하는{`\n`}조금 더 따뜻한 하루</Text>
         <Text style={styles.description}>
           React Native + Expo 모바일 앱과 FastAPI 서버의 기본 연결 환경입니다.
         </Text>
