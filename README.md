@@ -95,3 +95,31 @@ npm --prefix mobile run doctor
 - `OPENAI_API_KEY`와 `SUPABASE_SERVICE_ROLE_KEY`는 FastAPI 서버에서만 사용합니다.
 - 모바일에는 공개 가능한 `EXPO_PUBLIC_` 값만 둡니다.
 - `.env`, `.env.local`, 가상환경, 빌드 결과물은 Git에서 제외됩니다.
+
+## macOS에서 Gemini 채팅 실행
+
+프론트엔드는 공통 형식 `POST /api/chat`에 `messages: [{role, content}]`를 보내고
+`{reply}`를 받습니다. 공급자별 코드는 `backend/app/services/chat.py`에 분리되어 있습니다.
+현재 Gemini만 구현되어 있으며 OpenAI로 전환할 때 해당 공급자 어댑터를 추가합니다.
+
+1. `backend/.env.example`을 `backend/.env`로 복사하고 `GEMINI_API_KEY`를 로컬에서 입력합니다.
+2. AI Studio에서 해당 프로젝트가 Free Tier인지 확인합니다. 유료 결제를 연결한
+   프로젝트는 같은 모델도 과금될 수 있습니다. 코드는 결제 등급을 판별하지 않습니다.
+3. 기본 모델은 무료 등급이 제공되는 `gemini-3.1-flash-lite`입니다. 계정별 할당량은
+   AI Studio에서 확인합니다. 한도 초과 시 재시도/유료 모델 전환은 자동으로 하지 않습니다.
+4. 서버를 실행합니다 (환경변수 변경 후 서버 재시작 필요):
+
+```sh
+backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --port 8000
+```
+
+다른 터미널에서 `npm --prefix mobile run web`을 실행합니다.
+메시지 전송 중에는 중복 전송을 막고 실패하면 원문을 입력창에 복원합니다.
+최근 10개 대화 쌍을 서버에 전달하며 대화는 새로고침 시 초기화됩니다.
+센서 데이터와 데이터베이스 저장은 아직 연결되지 않았습니다.
+이 서버는 인증 없는 로컬 개발용이며 기본 localhost 주소에서만 실행합니다.
+API 키를 프론트엔드나 Git에 넣지 마세요.
+
+검사: `backend/.venv/bin/python -m pytest backend/tests`,
+`backend/.venv/bin/python -m ruff check backend`,
+`npm --prefix mobile run typecheck`, `npm --prefix mobile run lint`.

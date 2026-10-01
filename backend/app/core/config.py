@@ -21,6 +21,9 @@ class Settings(BaseSettings):
         "http://localhost:19006",
         "http://localhost:8080",
     ]
+    ai_provider: str = "gemini"
+    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None
