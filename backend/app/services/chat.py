@@ -2,6 +2,8 @@
 import httpx
 
 from app.core.config import Settings
+from app.schemas.persona import PlantContext
+from app.services.persona import build_system_instruction
 
 
 class ChatError(Exception):
@@ -10,17 +12,17 @@ class ChatError(Exception):
         self.status = status
 
 
-async def generate_reply(messages: list[dict[str, str]], settings: Settings) -> str:
+async def generate_reply(
+    messages: list[dict[str, str]],
+    settings: Settings,
+    plant: PlantContext | None = None,
+) -> str:
     if settings.ai_provider != "gemini":
         raise ChatError("아직 지원하지 않는 AI 서비스 설정입니다.", 503)
     if not settings.gemini_api_key or not settings.gemini_api_key.get_secret_value().strip():
         raise ChatError("서버에 Gemini API 키를 설정한 뒤 서버를 다시 시작해 주세요.", 503)
     payload = {
-        "systemInstruction": {"parts": [{"text": (
-            "너는 사용자의 반려식물 캐릭터다. 한국어로 따뜻하고 간결하게 대화한다. "
-            "이전 대화 맥락을 반영한다. 실제 센서나 식물 상태 정보는 제공되지 않았다. "
-            "수분, 온도, 건강 상태를 측정한 것처럼 말하지 말고 필요하면 사용자에게 물어본다."
-        )}]},
+        "systemInstruction": {"parts": [{"text": build_system_instruction(plant)}]},
         "contents": [
             {"role": "model" if m["role"] == "assistant" else "user",
              "parts": [{"text": m["content"]}]} for m in messages

@@ -20,14 +20,33 @@ export async function fetchHealth(): Promise<HealthResponse> {
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
-export async function fetchReply(messages: ChatMessage[]): Promise<string> {
+export type PlantPersonality = {
+  tone?: string;
+  energy?: number;
+  affection?: number;
+  humor?: number;
+  talk_length?: '짧게' | '보통' | '길게';
+  traits?: string[];
+  habits?: string[];
+  favorite_topics?: string[];
+  calling_user?: string;
+};
+
+export type PlantContext = {
+  name: string;
+  species?: string;
+  personality?: PlantPersonality;
+  memories?: string[];
+};
+
+export async function fetchReply(messages: ChatMessage[], plant?: PlantContext): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, ...(plant ? { plant } : {}) }),
       signal: controller.signal,
     });
     const data = await response.json();

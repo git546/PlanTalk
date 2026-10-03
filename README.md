@@ -116,9 +116,50 @@ backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --po
 다른 터미널에서 `npm --prefix mobile run web`을 실행합니다.
 메시지 전송 중에는 중복 전송을 막고 실패하면 원문을 입력창에 복원합니다.
 최근 10개 대화 쌍을 서버에 전달하며 대화는 새로고침 시 초기화됩니다.
-센서 데이터와 데이터베이스 저장은 아직 연결되지 않았습니다.
+데이터베이스 초안은 `supabase/migrations/202610030001_initial_plantalk_schema.sql`에 있습니다.
+Supabase 프로젝트에 마이그레이션을 적용하기 전까지 실제 저장은 동작하지 않습니다.
 이 서버는 인증 없는 로컬 개발용이며 기본 localhost 주소에서만 실행합니다.
 API 키를 프론트엔드나 Git에 넣지 마세요.
+
+## 데이터베이스와 페르소나
+
+초기 스키마는 다음 데이터를 분리합니다.
+
+- `profiles`: Supabase Auth 사용자의 추가 프로필
+- `plant_species`: 종별 일조량, 수분, 온도, 습도 등 공통 권장 범위
+- `persona_templates`: 재사용 가능한 성격 유형
+- `plants`: 개별 식물과 성격·관리 설정 덮어쓰기
+- `messages`: 식물별 전체 대화 원문
+- `memories`: 대화에서 추출한 식물별 장기 기억
+- `sensor_readings`: 시간에 따른 센서 측정 이력
+
+모든 사용자 데이터 테이블에는 RLS가 적용되어 소유자만 접근할 수 있습니다.
+기본 페르소나는 `backend/app/prompts/base_plant_persona.md`에서 관리합니다.
+채팅 API에 식물 컨텍스트를 함께 보내면 기본 페르소나 위에 개별 성격과 기억이 적용됩니다.
+
+```json
+{
+  "messages": [{"role": "user", "content": "오늘 기분 어때?"}],
+  "plant": {
+    "name": "초록이",
+    "species": "몬스테라",
+    "personality": {
+      "tone": "활발하고 다정한 반말",
+      "energy": 5,
+      "affection": 4,
+      "humor": 3,
+      "talk_length": "짧게",
+      "traits": ["장난꾸러기", "호기심이 많음"],
+      "calling_user": "친구"
+    },
+    "memories": ["사용자는 식물을 창가에서 키운다."]
+  }
+}
+```
+
+현재 단계에서는 클라이언트가 식물 컨텍스트를 전달할 수 있는 계약과 프롬프트 조합까지
+구현되어 있습니다. 다음 단계에서 로그인 사용자의 `plant_id`를 받아 Supabase에서 식물,
+성격, 기억, 최근 메시지를 조회하도록 연결합니다.
 
 검사: `backend/.venv/bin/python -m pytest backend/tests`,
 `backend/.venv/bin/python -m ruff check backend`,
