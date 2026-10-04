@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 const DEFAULT_API_URL = 'http://localhost:8000';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL;
@@ -30,6 +32,8 @@ export type PlantPersonality = {
   habits?: string[];
   favorite_topics?: string[];
   calling_user?: string;
+  custom_description?: string;
+  speech_example?: string;
 };
 
 export type PlantContext = {
@@ -43,9 +47,15 @@ export async function fetchReply(messages: ChatMessage[], plant?: PlantContext):
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error('로그인이 필요합니다.');
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({ messages, ...(plant ? { plant } : {}) }),
       signal: controller.signal,
     });

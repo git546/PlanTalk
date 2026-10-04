@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ShortText = Annotated[str, Field(min_length=1, max_length=200)]
 MemoryText = Annotated[str, Field(min_length=1, max_length=500)]
+CustomDescription = Annotated[str, Field(min_length=1, max_length=300)]
 
 
 class PersonalityProfile(BaseModel):
@@ -18,6 +19,8 @@ class PersonalityProfile(BaseModel):
     habits: list[ShortText] = Field(default_factory=list, max_length=8)
     favorite_topics: list[ShortText] = Field(default_factory=list, max_length=8)
     calling_user: ShortText | None = None
+    custom_description: CustomDescription | None = None
+    speech_example: ShortText | None = None
 
 
 class PlantContext(BaseModel):

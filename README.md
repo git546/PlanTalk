@@ -41,6 +41,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ```dotenv
 EXPO_PUBLIC_API_URL=http://localhost:8000
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
 - Android 에뮬레이터: `http://10.0.2.2:8000`
@@ -54,6 +56,7 @@ EXPO_PUBLIC_API_URL=http://localhost:8000
 ```dotenv
 OPENAI_API_KEY=
 SUPABASE_URL=
+SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
@@ -80,7 +83,22 @@ npm --prefix mobile start
 
 터미널에 표시된 QR 코드를 Expo Go로 스캔합니다. 휴대폰과 PC는 같은 네트워크에 연결해야 합니다.
 
-## 4. 검사
+## 4. 로그인
+
+- 앱을 열면 로그인 화면이 먼저 표시됩니다.
+- 아이디만 입력하면 내부적으로 `아이디@plantalk.local` 형식으로 변환해 Supabase Auth에 로그인합니다.
+- 현재 회원가입 화면은 없습니다. 팀 테스트 계정은 Supabase 대시보드의 Authentication에서 관리자가 생성합니다.
+- 로그인 세션은 기기에 저장되며 로그아웃할 때 삭제됩니다.
+- FastAPI의 `POST /api/chat`은 로그인 세션의 Bearer 토큰이 있어야 호출할 수 있습니다.
+- 테스트 계정 비밀번호는 저장소에 기록하지 않고 팀원에게 별도로 전달합니다.
+
+로그인 후에는 관리 홈이 열리고 `홈`, `채팅`, `페르소나`, `설정` 탭을 사용할 수 있습니다.
+현재 대화와 페르소나 설정은 사용자별로 기기에 저장됩니다. 페르소나에서 지정한 식물 이름,
+종류, 말투, 활발함, 애정 표현, 유머, 답변 길이와 사용자 호칭은 다음 AI 대화부터 적용됩니다.
+직접 성격 설명과 말투 예시를 추가하면 프리셋보다 구체적인 캐릭터를 만들 수 있습니다.
+설정 화면에서 로컬 대화와 페르소나를 기본값으로 초기화할 수 있습니다.
+
+## 5. 검사
 
 ```powershell
 npm --prefix mobile run typecheck
@@ -92,7 +110,7 @@ npm --prefix mobile run doctor
 
 ## 보안 원칙
 
-- `OPENAI_API_KEY`와 `SUPABASE_SERVICE_ROLE_KEY`는 FastAPI 서버에서만 사용합니다.
+- `OPENAI_API_KEY`, `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`는 FastAPI 서버에서만 사용합니다.
 - 모바일에는 공개 가능한 `EXPO_PUBLIC_` 값만 둡니다.
 - `.env`, `.env.local`, 가상환경, 빌드 결과물은 Git에서 제외됩니다.
 
@@ -118,7 +136,7 @@ backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --po
 최근 10개 대화 쌍을 서버에 전달하며 대화는 새로고침 시 초기화됩니다.
 데이터베이스 초안은 `supabase/migrations/202610030001_initial_plantalk_schema.sql`에 있습니다.
 Supabase 프로젝트에 마이그레이션을 적용하기 전까지 실제 저장은 동작하지 않습니다.
-이 서버는 인증 없는 로컬 개발용이며 기본 localhost 주소에서만 실행합니다.
+채팅 API는 Supabase 로그인 토큰을 검증하며 기본 localhost 주소에서 실행합니다.
 API 키를 프론트엔드나 Git에 넣지 마세요.
 
 ## 데이터베이스와 페르소나
@@ -158,8 +176,12 @@ API 키를 프론트엔드나 Git에 넣지 마세요.
 ```
 
 현재 단계에서는 클라이언트가 식물 컨텍스트를 전달할 수 있는 계약과 프롬프트 조합까지
-구현되어 있습니다. 다음 단계에서 로그인 사용자의 `plant_id`를 받아 Supabase에서 식물,
-성격, 기억, 최근 메시지를 조회하도록 연결합니다.
+구현되어 있습니다. 로그인 사용자가 대화하면 백엔드가 기본 식물을 Supabase에 만들거나
+갱신하고, `messages`에 대화 원문을 저장합니다. 답변 후에는 별도의 Gemini 호출이 다음
+대화에도 유용한 사실을 최대 3개까지 추출해 `memories`에 저장합니다. 다음 답변을 만들기
+전에는 중요도와 최신순으로 활성 기억을 최대 20개 불러와 판단 프롬프트에 포함합니다.
+기억 추출이나 저장이 실패해도 현재 채팅 응답은 정상적으로 반환됩니다. 현재 MVP는 사용자당
+기본 식물 하나를 기준으로 하며, 여러 식물 선택과 기억 편집 UI는 다음 확장 단계입니다.
 
 검사: `backend/.venv/bin/python -m pytest backend/tests`,
 `backend/.venv/bin/python -m ruff check backend`,

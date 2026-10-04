@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     supabase_url: str | None = None
+    supabase_anon_key: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
 
 
