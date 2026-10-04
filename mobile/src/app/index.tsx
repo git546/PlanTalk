@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { fetchReply, type ChatMessage } from '@/lib/api';
+import { fetchReply, fetchScenarios, type Scenario, type ChatMessage } from '@/lib/api';
 
 type Message = {
   id: number;
@@ -21,6 +21,16 @@ type Message = {
 
 export default function HomeScreen() {
   // 입력 중인 글과 이미 보낸 메시지를 따로 관리합니다.
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [scenario, setScenario] = useState('normal');
+  const [dataError, setDataError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    fetchScenarios().then((data) => { if (!cancelled) setScenarios(data); })
+      .catch(() => { if (!cancelled) setDataError('가상 데이터 로드 실패: 서버를 켜고 새로고침해 주세요.'); });
+    return () => { cancelled = true; };
+  }, []);
+  const selected = scenarios.find((item) => item.id === scenario);
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     { id: 0, sender: 'plant', text: '안녕! 오늘 하루는 어땠어?' },
@@ -45,7 +55,7 @@ export default function HomeScreen() {
     setMessages((previous) => [...previous, userMessage]);
     setDraft('');
     try {
-      const reply = await fetchReply([...history, { role: 'user', content: text }]);
+      const reply = await fetchReply([...history, { role: 'user', content: text }], scenario);
       const replyId = nextId.current++;
       setMessages((previous) => [...previous, { id: replyId, sender: 'plant', text: reply }]);
     } catch (cause) {
@@ -59,7 +69,7 @@ export default function HomeScreen() {
     }
   }
 
-  const canSend = draft.trim().length > 0 && !sending;
+  const canSend = draft.trim().length > 0 && !sending && !!selected;
 
   return (
     <SafeAreaView style={styles.page}>
@@ -72,6 +82,26 @@ export default function HomeScreen() {
           <Text style={styles.notice}>
             AI와 대화합니다. 최근 10번의 대화를 참고하며 새로고침하면 초기화됩니다.
           </Text>
+          <Text style={styles.notice}>가상 센서 데이터로 테스트 중 · 초록이 / 스킨답서스</Text>
+          <View style={styles.options}>
+            {scenarios.map((item) => (
+              <Pressable key={item.id} accessibilityRole="button"
+                accessibilityState={{ selected: scenario === item.id, disabled: sending }}
+                disabled={sending} style={[styles.option, scenario === item.id && styles.activeOption]}
+                onPress={() => {
+                  if (busy.current || scenario === item.id) return;
+                  setScenario(item.id); setMessages([]); setError('');
+                }}>
+                <Text>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {selected && <Text style={styles.notice}>
+            수분 지수 {selected.sensors.soil_moisture.value === null ? '측정 불가' : `${selected.sensors.soil_moisture.value}/100`} · 조도 {selected.sensors.illuminance.value} lx · 온도 {selected.sensors.temperature.value}°C
+            {'\n'}{selected.freshness} · 기준: {new Date(selected.reference_time).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} KST
+            {'\n'}가상 기록: 3일 전 물주기 / 어제 창가로 이동. 상황을 바꾸면 대화가 초기화됩니다.
+          </Text>}
+          {!!dataError && <Text accessibilityRole="alert">{dataError}</Text>}
         </View>
 
         <ScrollView
@@ -131,6 +161,9 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  option: { padding: 8, borderWidth: 1, borderColor: '#ccc', borderRadius: 4 },
+  activeOption: { backgroundColor: '#ddd', borderColor: '#333' },
   page: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1, width: '100%', maxWidth: 800, alignSelf: 'center' },
   header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#ddd' },

@@ -20,14 +20,14 @@ export async function fetchHealth(): Promise<HealthResponse> {
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
-export async function fetchReply(messages: ChatMessage[]): Promise<string> {
+export async function fetchReply(messages: ChatMessage[], scenario: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, scenario }),
       signal: controller.signal,
     });
     const data = await response.json();
@@ -41,4 +41,15 @@ export async function fetchReply(messages: ChatMessage[]): Promise<string> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+
+export type Scenario = {
+  id: string; label: string; reference_time: string; freshness: string;
+  sensors: Record<string, { value: number | null; unit: string; measured_at: string | null }>;
+};
+export async function fetchScenarios(): Promise<Scenario[]> {
+  const response = await fetch(`${API_URL}/api/plant/scenarios`);
+  if (!response.ok) throw new Error('가상 데이터를 가져오지 못했어요. 서버를 확인해 주세요.');
+  return response.json();
 }
