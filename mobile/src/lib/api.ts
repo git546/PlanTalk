@@ -71,3 +71,61 @@ export async function fetchReply(messages: ChatMessage[], plant?: PlantContext):
     clearTimeout(timeout);
   }
 }
+
+export type WaterBalanceRequest = {
+  period_days: number;
+  start_pot_weight_g: number;
+  end_pot_weight_g: number;
+  water_added_ml: number;
+  drainage_ml: number;
+  target_wet_weight_g: number;
+  watering_trigger_weight_g: number;
+  max_single_watering_ml?: number;
+};
+
+export type WaterBalanceResponse = {
+  observation_period_days: number;
+  storage_change_ml: number;
+  net_water_added_ml: number;
+  estimated_water_loss_ml: number;
+  average_daily_loss_ml: number;
+  drainage_ratio_percent: number | null;
+  refill_to_target_ml: number;
+  recommended_water_now_ml: number;
+  estimated_days_until_watering: number | null;
+  status: 'hydrated' | 'monitor' | 'water_soon' | 'water_now';
+  confidence: 'low' | 'medium' | 'high';
+  warnings: string[];
+  assumption: string;
+  trace: {
+    calculation_version: 'water-balance-rules-v1';
+    input_mode: 'legacy' | 'measurement_window';
+    measurement_sources: ('manual' | 'simulator' | 'device')[];
+    started_at: string | null;
+    ended_at: string | null;
+    device_ids: string[];
+  };
+};
+
+export async function fetchWaterBalance(
+  request: WaterBalanceRequest,
+): Promise<WaterBalanceResponse> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error('로그인이 필요합니다.');
+
+  const response = await fetch(`${API_URL}/api/water-balance`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(request),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : null;
+    throw new Error(detail ?? '수분량을 계산하지 못했어요. 입력값을 확인해 주세요.');
+  }
+  return data as WaterBalanceResponse;
+}

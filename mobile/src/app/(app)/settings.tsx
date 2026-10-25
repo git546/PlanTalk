@@ -4,11 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/auth';
 import { useConversation } from '@/context/conversation';
+import { usePlantCatalog } from '@/context/plant-catalog';
 import { usePlantProfile } from '@/context/plant-profile';
 
 export default function SettingsScreen() {
   const { session, signOut } = useAuth();
   const { resetConversation } = useConversation();
+  const { resetPlants } = usePlantCatalog();
   const { resetProfile } = usePlantProfile();
   const [busy, setBusy] = useState(false);
   const userName = session?.user.email?.split('@')[0] ?? '사용자';
@@ -21,7 +23,7 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: () => {
           setBusy(true);
-          void Promise.all([resetConversation(), resetProfile()]).finally(() => setBusy(false));
+          void Promise.all([resetConversation(), resetProfile(), resetPlants()]).finally(() => setBusy(false));
         },
       },
     ]);
@@ -56,7 +58,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>데이터</Text>
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>대화 및 페르소나</Text>
+              <Text style={styles.rowTitle}>대화·페르소나·식물 목록</Text>
               <Text style={styles.rowDescription}>현재 단계에서는 이 기기에만 저장됩니다.</Text>
             </View>
             <Text style={styles.localBadge}>로컬</Text>

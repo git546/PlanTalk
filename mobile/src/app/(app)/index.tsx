@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -86,6 +86,20 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.cardGrid}>
+          <MenuCard
+            eyebrow="MY PLANTS"
+            title="식물 관리"
+            description="화분별 기준 무게와 물주기 설정을 관리해요."
+            color="#e8f3df"
+            onPress={() => router.push('/plants' as Href)}
+          />
+          <MenuCard
+            eyebrow="WATER BALANCE"
+            title="수분량 계산기"
+            description="급수량과 배수량, 무게 변화로 물주기 시점을 계산해요."
+            color="#dff1ee"
+            onPress={() => router.push('/water' as Href)}
+          />
           <MenuCard
             eyebrow="PERSONA"
             title="페르소나 관리"

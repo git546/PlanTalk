@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/context/auth';
 import { ConversationProvider } from '@/context/conversation';
+import { PlantCatalogProvider } from '@/context/plant-catalog';
 import { PlantProfileProvider } from '@/context/plant-profile';
 
 function RootNavigator() {
@@ -33,11 +34,13 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <PlantProfileProvider>
-        <ConversationProvider>
-          <RootNavigator />
-        </ConversationProvider>
-      </PlantProfileProvider>
+      <PlantCatalogProvider>
+        <PlantProfileProvider>
+          <ConversationProvider>
+            <RootNavigator />
+          </ConversationProvider>
+        </PlantProfileProvider>
+      </PlantCatalogProvider>
       <StatusBar style="dark" />
     </AuthProvider>
   );

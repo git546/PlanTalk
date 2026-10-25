@@ -30,6 +30,10 @@ export default function AppLayout() {
         options={{ title: '채팅', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>●</Text> }}
       />
       <Tabs.Screen
+        name="plants"
+        options={{ title: '식물', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>♧</Text> }}
+      />
+      <Tabs.Screen
         name="persona"
         options={{ title: '페르소나', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>♧</Text> }}
       />
@@ -37,6 +41,7 @@ export default function AppLayout() {
         name="settings"
         options={{ title: '설정', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>⚙</Text> }}
       />
+      <Tabs.Screen name="water" options={{ href: null }} />
     </Tabs>
   );
 }
