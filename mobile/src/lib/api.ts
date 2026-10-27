@@ -37,6 +37,7 @@ export type PlantPersonality = {
 };
 
 export type PlantContext = {
+  id?: string;
   name: string;
   species?: string;
   personality?: PlantPersonality;

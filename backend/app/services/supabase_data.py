@@ -46,15 +46,19 @@ async def get_or_create_plant(
     base_url = _base_url(settings)
     headers = _headers(settings, access_token)
     async with httpx.AsyncClient(timeout=12) as client:
+        query_params = {
+            "select": "id,name",
+            "user_id": f"eq.{user_id}",
+            "limit": "1",
+        }
+        if plant.id:
+            query_params["id"] = f"eq.{plant.id}"
+        else:
+            query_params["order"] = "created_at.asc"
         response = await client.get(
             f"{base_url}/plants",
             headers=headers,
-            params={
-                "select": "id,name",
-                "user_id": f"eq.{user_id}",
-                "order": "created_at.asc",
-                "limit": "1",
-            },
+            params=query_params,
         )
         if response.is_error:
             raise DataStoreError("식물 정보를 불러오지 못했습니다.")
@@ -75,6 +79,9 @@ async def get_or_create_plant(
             if update.is_error:
                 raise DataStoreError("식물 설정을 저장하지 못했습니다.")
             return plant_id
+
+        if plant.id:
+            raise DataStoreError("선택한 식물을 찾지 못했습니다.")
 
         create = await client.post(
             f"{base_url}/plants",

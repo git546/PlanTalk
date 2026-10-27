@@ -16,7 +16,10 @@ export default function SettingsScreen() {
   const userName = session?.user.email?.split('@')[0] ?? '사용자';
 
   function confirmReset() {
-    Alert.alert('로컬 데이터 초기화', '저장된 대화와 페르소나 설정을 기본값으로 되돌릴까요?', [
+    Alert.alert(
+      '데이터 초기화',
+      '로컬 대화·페르소나와 Supabase의 식물·측정·기억 데이터를 모두 삭제할까요?',
+      [
       { text: '취소', style: 'cancel' },
       {
         text: '초기화',
@@ -26,7 +29,8 @@ export default function SettingsScreen() {
           void Promise.all([resetConversation(), resetProfile(), resetPlants()]).finally(() => setBusy(false));
         },
       },
-    ]);
+      ],
+    );
   }
 
   async function logout() {
@@ -58,14 +62,14 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>데이터</Text>
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>대화·페르소나·식물 목록</Text>
-              <Text style={styles.rowDescription}>현재 단계에서는 이 기기에만 저장됩니다.</Text>
+              <Text style={styles.rowTitle}>대화·페르소나·식물 데이터</Text>
+              <Text style={styles.rowDescription}>식물과 측정 이력은 Supabase, 대화 화면 설정은 이 기기에 저장됩니다.</Text>
             </View>
-            <Text style={styles.localBadge}>로컬</Text>
+            <Text style={styles.localBadge}>혼합</Text>
           </View>
           <View style={styles.divider} />
           <Pressable disabled={busy} onPress={confirmReset} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-            <Text style={styles.dangerText}>로컬 데이터 초기화</Text>
+            <Text style={styles.dangerText}>전체 데이터 초기화</Text>
           </Pressable>
         </View>
 

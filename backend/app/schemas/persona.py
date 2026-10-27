@@ -28,6 +28,7 @@ class PlantContext(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    id: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     name: ShortText
     species: ShortText | None = None
     personality: PersonalityProfile = Field(default_factory=PersonalityProfile)

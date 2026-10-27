@@ -63,13 +63,15 @@ function WeightInput({
 
 export default function PlantsScreen() {
   const {
-    plants, selectedPlant, selectedPlantId, selectPlant, addPlant, updatePlant, deletePlant,
+    plants, selectedPlant, selectedPlantId, syncError,
+    selectPlant, addPlant, updatePlant, deletePlant,
   } = usePlantCatalog();
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newSpecies, setNewSpecies] = useState('');
   const [draftOverride, setDraft] = useState<CalibrationDraft | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const draft = draftOverride ?? calibrationFromPlant(selectedPlant);
 
   function updateDraft(key: keyof CalibrationDraft, value: string) {
@@ -88,12 +90,19 @@ export default function PlantsScreen() {
       setMessage('식물 이름을 입력해 주세요.');
       return;
     }
-    await addPlant(newName, newSpecies);
-    setDraft(null);
-    setNewName('');
-    setNewSpecies('');
-    setShowAdd(false);
-    setMessage('식물을 추가했습니다. 이제 기준 무게를 설정해 주세요.');
+    setBusy(true);
+    try {
+      await addPlant(newName, newSpecies);
+      setDraft(null);
+      setNewName('');
+      setNewSpecies('');
+      setShowAdd(false);
+      setMessage('식물을 추가했습니다. 이제 기준 무게를 설정해 주세요.');
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : '식물을 추가하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveCalibration() {
@@ -115,15 +124,23 @@ export default function PlantsScreen() {
       return;
     }
 
-    await updatePlant({
-      ...selectedPlant,
-      setupWeightG: setupWeight,
-      targetWetWeightG: targetWeight,
-      wateringTriggerWeightG: triggerWeight,
-      maxSingleWateringMl: maxWatering,
-      calibrationUpdatedAt: new Date().toISOString(),
-    });
-    setMessage('무게 기준을 저장했습니다.');
+    setBusy(true);
+    try {
+      await updatePlant({
+        ...selectedPlant,
+        setupWeightG: setupWeight,
+        targetWetWeightG: targetWeight,
+        wateringTriggerWeightG: triggerWeight,
+        maxSingleWateringMl: maxWatering,
+        calibrationUpdatedAt: new Date().toISOString(),
+      });
+      setDraft(null);
+      setMessage('무게 기준을 Supabase에 저장했습니다.');
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : '무게 기준을 저장하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function confirmDelete(plant: ManagedPlant) {
@@ -132,7 +149,15 @@ export default function PlantsScreen() {
       {
         text: '삭제',
         style: 'destructive',
-        onPress: () => { setDraft(null); void deletePlant(plant.id); },
+        onPress: () => {
+          setDraft(null);
+          setBusy(true);
+          void deletePlant(plant.id)
+            .catch((reason) => {
+              setMessage(reason instanceof Error ? reason.message : '식물을 삭제하지 못했습니다.');
+            })
+            .finally(() => setBusy(false));
+        },
       },
     ]);
   }
@@ -151,6 +176,8 @@ export default function PlantsScreen() {
           </Pressable>
         </View>
 
+        {syncError ? <Text style={styles.syncError}>{syncError}</Text> : null}
+
         {showAdd ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>새 식물</Text>
@@ -158,8 +185,8 @@ export default function PlantsScreen() {
             <TextInput value={newName} onChangeText={setNewName} style={styles.input} placeholder="예: 초록이" />
             <Text style={styles.fieldLabel}>식물 종류</Text>
             <TextInput value={newSpecies} onChangeText={setNewSpecies} style={styles.input} placeholder="예: 몬스테라" />
-            <Pressable onPress={() => void createPlant()} style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>목록에 추가</Text>
+            <Pressable disabled={busy} onPress={() => void createPlant()} style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>{busy ? '저장 중…' : '목록에 추가'}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -227,8 +254,8 @@ export default function PlantsScreen() {
               onChangeText={(value) => updateDraft('maxWatering', value)}
             />
             {message ? <Text style={styles.message}>{message}</Text> : null}
-            <Pressable onPress={() => void saveCalibration()} style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>무게 기준 저장</Text>
+            <Pressable disabled={busy} onPress={() => void saveCalibration()} style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>{busy ? '저장 중…' : '무게 기준 저장'}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -274,4 +301,5 @@ const styles = StyleSheet.create({
   emptyTitle: { color: '#284533', fontSize: 16, fontWeight: '800', marginTop: 9 },
   emptyText: { color: '#7a887f', fontSize: 12, marginTop: 5 },
   message: { color: '#247a52', fontSize: 12, lineHeight: 18, marginTop: 12 },
+  syncError: { color: '#b42318', fontSize: 12, lineHeight: 18, marginTop: 12 },
 });

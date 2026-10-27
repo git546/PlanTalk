@@ -158,3 +158,79 @@ with check (exists (
   where plants.id = care_events.plant_id
     and plants.user_id = auth.uid()
 ));
+
+-- Replace the active calibration and increment its version in one transaction.
+-- Locking the plant row prevents two clients from creating the same version.
+create or replace function public.save_plant_water_calibration(
+  p_plant_id uuid,
+  p_setup_weight_g numeric,
+  p_target_wet_weight_g numeric,
+  p_watering_trigger_weight_g numeric,
+  p_max_single_watering_ml numeric,
+  p_notes text default null
+)
+returns public.plant_water_calibrations
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  next_version integer;
+  saved public.plant_water_calibrations;
+begin
+  perform 1
+  from public.plants
+  where id = p_plant_id and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'Plant not found or access denied' using errcode = '42501';
+  end if;
+
+  if p_setup_weight_g <= 0
+    or p_target_wet_weight_g <= 0
+    or p_watering_trigger_weight_g <= 0
+    or p_watering_trigger_weight_g >= p_target_wet_weight_g
+    or (p_max_single_watering_ml is not null and p_max_single_watering_ml <= 0)
+  then
+    raise exception 'Invalid water calibration values' using errcode = '22023';
+  end if;
+
+  select coalesce(max(calibration_version), 0) + 1
+  into next_version
+  from public.plant_water_calibrations
+  where plant_id = p_plant_id;
+
+  update public.plant_water_calibrations
+  set is_active = false
+  where plant_id = p_plant_id and is_active;
+
+  insert into public.plant_water_calibrations (
+    plant_id,
+    setup_weight_g,
+    target_wet_weight_g,
+    watering_trigger_weight_g,
+    max_single_watering_ml,
+    calibration_version,
+    is_active,
+    notes
+  )
+  values (
+    p_plant_id,
+    p_setup_weight_g,
+    p_target_wet_weight_g,
+    p_watering_trigger_weight_g,
+    p_max_single_watering_ml,
+    next_version,
+    true,
+    p_notes
+  )
+  returning * into saved;
+
+  return saved;
+end;
+$$;
+
+grant execute on function public.save_plant_water_calibration(
+  uuid, numeric, numeric, numeric, numeric, text
+) to authenticated;

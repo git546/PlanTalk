@@ -101,11 +101,14 @@
 
 ## 저장 구조
 
-`supabase/migrations/202610250001_water_measurement_pipeline.sql`은 다음 테이블의 초안이다.
+`supabase/migrations/202610250001_water_measurement_pipeline.sql`은 다음 테이블을 정의한다.
 
 - `measurement_devices`: 기기 소유자, 하드웨어와 펌웨어 버전, 마지막 접속 시각
 - `plant_water_calibrations`: 식물별 보정값과 버전 이력
 - `weight_measurements`: 정규화 무게, 원시 센서값, 안정 여부, 환경값
 - `care_events`: 급수·배수·보정·세팅 변경 이벤트
 
-마이그레이션 파일은 저장소에 추가된 설계안이며 Supabase 원격 프로젝트에는 자동 적용되지 않는다.
+PlanTalk 원격 Supabase 프로젝트에는 2026-10-27 적용했다. 모바일은 RLS가 적용된 사용자
+세션으로 식물·활성 보정값·수동 무게·급수/배수 이벤트를 읽고 쓴다. 활성 보정값 교체는
+`save_plant_water_calibration` 함수가 식물 행을 잠근 뒤 기존 값을 비활성화하고 버전을 올려
+트랜잭션 하나로 처리한다.

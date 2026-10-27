@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router, type Href } from 'expo-router';
 import {
   ActivityIndicator,
@@ -17,6 +17,12 @@ import {
   type WaterBalanceRequest,
   type WaterBalanceResponse,
 } from '@/lib/api';
+import {
+  loadWaterHistory,
+  recordManualCareEvent,
+  recordManualWeight,
+  type WaterHistoryItem,
+} from '@/lib/water-history';
 
 type InputKey =
   | 'periodDays'
@@ -94,18 +100,124 @@ function ResultItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+const HISTORY_LABEL: Record<WaterHistoryItem['kind'], string> = {
+  weight: '무게',
+  watering: '급수',
+  drainage: '배수',
+};
+
+function formatRecordedAt(value: string): string {
+  return new Date(value).toLocaleString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function WaterCalculatorScreen() {
   const { plants, selectedPlant, selectedPlantId, selectPlant } = usePlantCatalog();
   const [values, setValues] = useState<InputValues>(EMPTY_VALUES);
   const [result, setResult] = useState<WaterBalanceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<WaterHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordWeight, setRecordWeight] = useState('');
+  const [careVolume, setCareVolume] = useState('');
+  const [careType, setCareType] = useState<'watering' | 'drainage'>('watering');
+  const [recordMessage, setRecordMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadHistory() {
+      if (!selectedPlantId) {
+        setHistory([]);
+        return;
+      }
+      setHistoryLoading(true);
+      setRecordMessage(null);
+      try {
+        const items = await loadWaterHistory(selectedPlantId);
+        if (active) setHistory(items);
+      } catch (reason) {
+        if (active) {
+          setRecordMessage(
+            reason instanceof Error ? reason.message : '측정 이력을 불러오지 못했습니다.',
+          );
+        }
+      } finally {
+        if (active) setHistoryLoading(false);
+      }
+    }
+    void loadHistory();
+    return () => { active = false; };
+  }, [selectedPlantId]);
 
   async function choosePlant(plantId: string) {
     setValues(EMPTY_VALUES);
     setResult(null);
     setError(null);
+    setRecordWeight('');
+    setCareVolume('');
+    setRecordMessage(null);
     await selectPlant(plantId);
+  }
+
+  async function refreshHistory() {
+    if (!selectedPlantId) return;
+    setHistory(await loadWaterHistory(selectedPlantId));
+  }
+
+  async function saveWeightRecord() {
+    if (!selectedPlantId) {
+      setRecordMessage('먼저 식물을 선택해 주세요.');
+      return;
+    }
+    const weight = parseNumber(recordWeight || values.currentWeight);
+    if (weight === null || weight <= 0) {
+      setRecordMessage('기록할 현재 무게를 0보다 큰 숫자로 입력해 주세요.');
+      return;
+    }
+    setRecording(true);
+    setRecordMessage(null);
+    try {
+      await recordManualWeight(selectedPlantId, weight);
+      await refreshHistory();
+      setRecordWeight('');
+      setRecordMessage('현재 무게를 Supabase에 기록했습니다.');
+    } catch (reason) {
+      setRecordMessage(reason instanceof Error ? reason.message : '무게를 기록하지 못했습니다.');
+    } finally {
+      setRecording(false);
+    }
+  }
+
+  async function saveCareRecord() {
+    if (!selectedPlantId) {
+      setRecordMessage('먼저 식물을 선택해 주세요.');
+      return;
+    }
+    const volume = parseNumber(careVolume);
+    if (volume === null || volume <= 0) {
+      setRecordMessage('이번 1회 급수·배수량을 0보다 큰 숫자로 입력해 주세요.');
+      return;
+    }
+    setRecording(true);
+    setRecordMessage(null);
+    try {
+      await recordManualCareEvent(selectedPlantId, careType, volume);
+      await refreshHistory();
+      setCareVolume('');
+      setRecordMessage(`${careType === 'watering' ? '급수' : '배수'} 기록을 저장했습니다.`);
+    } catch (reason) {
+      setRecordMessage(
+        reason instanceof Error ? reason.message : '급수·배수 기록을 저장하지 못했습니다.',
+      );
+    } finally {
+      setRecording(false);
+    }
   }
 
   function updateValue(key: InputKey, value: string) {
@@ -301,6 +413,101 @@ export default function WaterCalculatorScreen() {
             <Text style={styles.assumption}>{result.assumption} 수분 손실에는 식물의 증산과 흙 표면 증발이 모두 포함됩니다.</Text>
           </View>
         ) : null}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>측정·돌봄 기록</Text>
+          <Text style={styles.historyDescription}>
+            계산기의 누적값과 별개로, 실제로 방금 측정하거나 준 1회분만 저장합니다.
+          </Text>
+
+          <Text style={styles.recordLabel}>현재 안정 무게</Text>
+          <View style={styles.recordRow}>
+            <TextInput
+              accessibilityLabel="기록할 현재 무게"
+              keyboardType="decimal-pad"
+              onChangeText={setRecordWeight}
+              placeholder={values.currentWeight || '0'}
+              placeholderTextColor="#9aa69e"
+              style={[styles.input, styles.recordInput]}
+              value={recordWeight}
+            />
+            <Text style={styles.recordUnit}>g</Text>
+            <Pressable
+              disabled={recording || !selectedPlantId}
+              onPress={() => void saveWeightRecord()}
+              style={({ pressed }) => [
+                styles.recordButton,
+                pressed && styles.pressed,
+                (recording || !selectedPlantId) && styles.disabled,
+              ]}
+            >
+              <Text style={styles.recordButtonText}>무게 기록</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.recordLabel}>이번 1회 급수·배수량</Text>
+          <View style={styles.typeRow}>
+            {(['watering', 'drainage'] as const).map((type) => (
+              <Pressable
+                key={type}
+                onPress={() => setCareType(type)}
+                style={[styles.typeButton, careType === type && styles.typeButtonSelected]}
+              >
+                <Text style={[
+                  styles.typeButtonText,
+                  careType === type && styles.typeButtonTextSelected,
+                ]}>
+                  {type === 'watering' ? '급수' : '배수'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.recordRow}>
+            <TextInput
+              accessibilityLabel="이번 1회 급수 또는 배수량"
+              keyboardType="decimal-pad"
+              onChangeText={setCareVolume}
+              placeholder="0"
+              placeholderTextColor="#9aa69e"
+              style={[styles.input, styles.recordInput]}
+              value={careVolume}
+            />
+            <Text style={styles.recordUnit}>mL</Text>
+            <Pressable
+              disabled={recording || !selectedPlantId}
+              onPress={() => void saveCareRecord()}
+              style={({ pressed }) => [
+                styles.recordButton,
+                pressed && styles.pressed,
+                (recording || !selectedPlantId) && styles.disabled,
+              ]}
+            >
+              <Text style={styles.recordButtonText}>{careType === 'watering' ? '급수 기록' : '배수 기록'}</Text>
+            </Pressable>
+          </View>
+
+          {recordMessage ? <Text style={styles.recordMessage}>{recordMessage}</Text> : null}
+
+          <View style={styles.historyDivider} />
+          <Text style={styles.historyTitle}>최근 기록</Text>
+          {historyLoading ? (
+            <ActivityIndicator color="#247a52" style={styles.historyLoading} />
+          ) : history.length === 0 ? (
+            <Text style={styles.historyEmpty}>아직 저장된 기록이 없습니다.</Text>
+          ) : (
+            <View style={styles.historyList}>
+              {history.map((item) => (
+                <View key={item.id} style={styles.historyItem}>
+                  <View style={styles.historyBadge}>
+                    <Text style={styles.historyBadgeText}>{HISTORY_LABEL[item.kind]}</Text>
+                  </View>
+                  <Text style={styles.historyValue}>{item.value} {item.unit}</Text>
+                  <Text style={styles.historyDate}>{formatRecordedAt(item.occurredAt)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -359,4 +566,27 @@ const styles = StyleSheet.create({
   warningTitle: { color: '#704d18', fontSize: 12, fontWeight: '800', marginBottom: 4 },
   warningText: { color: '#735927', fontSize: 11, lineHeight: 17, marginTop: 3 },
   assumption: { color: '#c8dfd0', fontSize: 10, lineHeight: 16, marginTop: 14 },
+  historyDescription: { color: '#77857d', fontSize: 11, lineHeight: 17, marginTop: 4 },
+  recordLabel: { color: '#405347', fontSize: 12, fontWeight: '800', marginTop: 16, marginBottom: 7 },
+  recordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recordInput: { flex: 1, minWidth: 0 },
+  recordUnit: { width: 24, color: '#77857d', fontSize: 11, fontWeight: '700' },
+  recordButton: { minWidth: 82, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, borderRadius: 12, backgroundColor: '#247a52' },
+  recordButtonText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  typeButton: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: '#cbd8ce', borderRadius: 10, backgroundColor: '#fff' },
+  typeButtonSelected: { borderColor: '#247a52', backgroundColor: '#e5f2e8' },
+  typeButtonText: { color: '#64756b', fontSize: 11, fontWeight: '700' },
+  typeButtonTextSelected: { color: '#247a52' },
+  recordMessage: { color: '#247a52', fontSize: 11, lineHeight: 17, marginTop: 10 },
+  historyDivider: { height: 1, backgroundColor: '#e6ece7', marginVertical: 17 },
+  historyTitle: { color: '#294334', fontSize: 13, fontWeight: '800' },
+  historyLoading: { marginTop: 18 },
+  historyEmpty: { color: '#849087', fontSize: 11, marginTop: 12 },
+  historyList: { gap: 8, marginTop: 11 },
+  historyItem: { minHeight: 42, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, borderRadius: 11, backgroundColor: '#f4f8f4' },
+  historyBadge: { minWidth: 38, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7, backgroundColor: '#e0efe4' },
+  historyBadgeText: { color: '#247a52', fontSize: 10, fontWeight: '800', textAlign: 'center' },
+  historyValue: { color: '#294334', fontSize: 12, fontWeight: '800', marginLeft: 9 },
+  historyDate: { color: '#7c8981', fontSize: 10, marginLeft: 'auto' },
 });

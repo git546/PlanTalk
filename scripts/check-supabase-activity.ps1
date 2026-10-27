@@ -39,18 +39,20 @@ if ([string]::IsNullOrWhiteSpace($anonKey)) {
     throw 'SUPABASE_ANON_KEY가 설정되어 있지 않습니다.'
 }
 
-$requestUrl = $supabaseUrl.TrimEnd('/') + '/rest/v1/plants?select=id&limit=1'
+$requestUrl = $supabaseUrl.TrimEnd('/') + '/rest/v1/rpc/keepalive'
 $headers = @{
     apikey        = $anonKey
     Authorization = "Bearer $anonKey"
+    'Content-Type' = 'application/json'
 }
 
 try {
     $response = Invoke-WebRequest `
         -UseBasicParsing `
-        -Method Get `
+        -Method Post `
         -Uri $requestUrl `
         -Headers $headers `
+        -Body '{}' `
         -TimeoutSec 30
 } catch {
     $statusCode = $null

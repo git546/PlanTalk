@@ -13,17 +13,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useConversation } from '@/context/conversation';
+import { usePlantCatalog } from '@/context/plant-catalog';
 import { usePlantProfile } from '@/context/plant-profile';
 import { fetchReply, type ChatMessage } from '@/lib/api';
 
 export default function ChatScreen() {
   const { profile, plantContext } = usePlantProfile();
+  const { selectedPlant } = usePlantCatalog();
   const { messages, isLoading, nextMessageId, setMessages, resetConversation } = useConversation();
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const busy = useRef(false);
   const conversation = useRef<ScrollView>(null);
+  const chatPlantName = selectedPlant?.name ?? profile.name;
+  const chatPlantSpecies = selectedPlant?.species ?? profile.species;
 
   async function sendMessage() {
     const text = draft.trim();
@@ -39,7 +43,17 @@ export default function ChatScreen() {
     setMessages((previous) => [...previous, userMessage]);
     setDraft('');
     try {
-      const reply = await fetchReply([...history, { role: 'user', content: text }], plantContext);
+      const reply = await fetchReply(
+        [...history, { role: 'user', content: text }],
+        {
+          ...plantContext,
+          ...(selectedPlant ? {
+            id: selectedPlant.id,
+            name: selectedPlant.name,
+            species: selectedPlant.species,
+          } : {}),
+        },
+      );
       setMessages((previous) => [
         ...previous,
         { id: nextMessageId(), sender: 'plant', text: reply },
@@ -64,8 +78,8 @@ export default function ChatScreen() {
           <View style={styles.identity}>
             <View style={styles.avatar}><Text style={styles.avatarText}>🪴</Text></View>
             <View>
-              <Text style={styles.title}>{profile.name}</Text>
-              <Text style={styles.notice}>{profile.species} · 지금 대화할 수 있어요</Text>
+              <Text style={styles.title}>{chatPlantName}</Text>
+              <Text style={styles.notice}>{chatPlantSpecies} · 지금 대화할 수 있어요</Text>
             </View>
           </View>
           <Pressable
@@ -92,7 +106,7 @@ export default function ChatScreen() {
                 key={message.id}
                 style={[styles.message, message.sender === 'user' ? styles.userMessage : styles.plantMessage]}
               >
-                <Text style={styles.sender}>{message.sender === 'user' ? '나' : profile.name}</Text>
+                <Text style={styles.sender}>{message.sender === 'user' ? '나' : chatPlantName}</Text>
                 <Text selectable style={styles.messageText}>{message.text}</Text>
               </View>
             ))}
@@ -104,7 +118,7 @@ export default function ChatScreen() {
         <View style={styles.composer}>
           <TextInput
             accessibilityLabel="메시지 입력"
-            placeholder={`${profile.name}에게 메시지 보내기`}
+            placeholder={`${chatPlantName}에게 메시지 보내기`}
             placeholderTextColor="#829087"
             value={draft}
             onChangeText={setDraft}

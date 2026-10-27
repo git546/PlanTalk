@@ -50,6 +50,7 @@ def test_chat_passes_plant_persona(mock_authentication):
     body = {
         "messages": [{"role": "user", "content": "안녕"}],
         "plant": {
+            "id": "4f35e3bf-8142-4370-95f2-72af36c087a9",
             "name": "초록이",
             "species": "몬스테라",
             "personality": {
@@ -65,6 +66,7 @@ def test_chat_passes_plant_persona(mock_authentication):
         response = client.post("/api/chat", json=body, headers=AUTH_HEADERS)
         assert response.status_code == 200
         plant = reply.call_args.kwargs["plant"]
+        assert plant.id == "4f35e3bf-8142-4370-95f2-72af36c087a9"
         assert plant.name == "초록이"
         assert plant.personality.energy == 5
         mock_authentication["remember"].assert_awaited_once()

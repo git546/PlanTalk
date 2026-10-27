@@ -259,3 +259,43 @@ def test_rejects_measurement_window_longer_than_ninety_days() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_four_watering_cycles_cover_dry_down_and_refill() -> None:
+    cycles = [
+        example_request(
+            start_pot_weight_g=3800,
+            end_pot_weight_g=3600,
+            water_added_ml=0,
+            drainage_ml=0,
+        ),
+        example_request(
+            start_pot_weight_g=3600,
+            end_pot_weight_g=3400,
+            water_added_ml=0,
+            drainage_ml=0,
+        ),
+        example_request(
+            start_pot_weight_g=3400,
+            end_pot_weight_g=3250,
+            water_added_ml=0,
+            drainage_ml=0,
+        ),
+        example_request(
+            start_pot_weight_g=3250,
+            end_pot_weight_g=3800,
+            water_added_ml=650,
+            drainage_ml=50,
+        ),
+    ]
+
+    results = [calculate_water_balance(cycle) for cycle in cycles]
+
+    assert [result.status for result in results] == [
+        "monitor",
+        "water_soon",
+        "water_now",
+        "hydrated",
+    ]
+    assert results[2].recommended_water_now_ml == 550
+    assert results[3].estimated_water_loss_ml == 50
