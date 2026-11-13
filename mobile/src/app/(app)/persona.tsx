@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppIcon } from '@/components/app-icon';
 import { type PlantProfile, usePlantProfile } from '@/context/plant-profile';
+import { colors, radius, spacing } from '@/theme/tokens';
 
 const TONE_OPTIONS: { value: PlantProfile['tonePreset']; label: string; description: string }[] = [
   { value: 'warm', label: '다정한 친구', description: '따뜻하고 편안한 반말' },
@@ -25,6 +28,8 @@ function LevelPicker({ label, value, onChange }: LevelPickerProps) {
           <Pressable
             key={level}
             accessibilityRole="button"
+            accessibilityLabel={`${label} ${level}단계`}
+            accessibilityState={{ selected: value === level }}
             onPress={() => onChange(level)}
             style={[styles.level, value === level && styles.levelSelected]}
           >
@@ -64,8 +69,12 @@ export default function PersonaScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.page}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Pressable accessibilityLabel="이전 화면" accessibilityRole="button" hitSlop={8} onPress={() => router.back()} style={styles.backButton}>
+          <AppIcon color={colors.text} name="chevron-back" size={22} />
+          <Text style={styles.backButtonText}>식물 설정</Text>
+        </Pressable>
         <Text style={styles.eyebrow}>PERSONA</Text>
-        <Text style={styles.title}>식물의 성격 만들기</Text>
+        <Text accessibilityRole="header" style={styles.title}>대화 성격 설정</Text>
         <Text style={styles.description}>저장한 성격은 다음 대화부터 바로 적용됩니다.</Text>
 
         <View style={styles.preview}>
@@ -79,11 +88,11 @@ export default function PersonaScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>기본 정보</Text>
           <Text style={styles.fieldLabel}>식물 이름</Text>
-          <TextInput value={draft.name} onChangeText={(value) => update('name', value)} maxLength={50} style={styles.input} placeholder="예: 초록이" />
+          <TextInput accessibilityLabel="식물 이름" value={draft.name} onChangeText={(value) => update('name', value)} maxLength={50} style={styles.input} placeholder="예: 초록이" />
           <Text style={styles.fieldLabel}>식물 종류</Text>
-          <TextInput value={draft.species} onChangeText={(value) => update('species', value)} maxLength={80} style={styles.input} placeholder="예: 몬스테라" />
+          <TextInput accessibilityLabel="식물 종류" value={draft.species} onChangeText={(value) => update('species', value)} maxLength={80} style={styles.input} placeholder="예: 몬스테라" />
           <Text style={styles.fieldLabel}>나를 부르는 호칭</Text>
-          <TextInput value={draft.callingUser} onChangeText={(value) => update('callingUser', value)} maxLength={20} style={styles.input} placeholder="예: 친구, 주인님" />
+          <TextInput accessibilityLabel="사용자를 부르는 호칭" value={draft.callingUser} onChangeText={(value) => update('callingUser', value)} maxLength={20} style={styles.input} placeholder="예: 친구, 주인님" />
         </View>
 
         <View style={styles.section}>
@@ -92,6 +101,8 @@ export default function PersonaScreen() {
             {TONE_OPTIONS.map((option) => (
               <Pressable
                 key={option.value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: draft.tonePreset === option.value }}
                 onPress={() => update('tonePreset', option.value)}
                 style={[styles.toneCard, draft.tonePreset === option.value && styles.toneCardSelected]}
               >
@@ -113,7 +124,7 @@ export default function PersonaScreen() {
           <Text style={styles.fieldLabel}>답변 길이</Text>
           <View style={styles.segmented}>
             {(['짧게', '보통', '길게'] as const).map((length) => (
-              <Pressable key={length} onPress={() => update('talkLength', length)} style={[styles.segment, draft.talkLength === length && styles.segmentSelected]}>
+              <Pressable accessibilityRole="button" accessibilityState={{ selected: draft.talkLength === length }} key={length} onPress={() => update('talkLength', length)} style={[styles.segment, draft.talkLength === length && styles.segmentSelected]}>
                 <Text style={[styles.segmentText, draft.talkLength === length && styles.segmentTextSelected]}>{length}</Text>
               </Pressable>
             ))}
@@ -125,6 +136,7 @@ export default function PersonaScreen() {
           <Text style={styles.sectionHint}>프리셋으로 표현하기 어려운 성격과 말버릇을 자유롭게 적어 주세요.</Text>
           <Text style={styles.fieldLabel}>직접 성격 설명</Text>
           <TextInput
+            accessibilityLabel="직접 성격 설명"
             value={draft.customDescription}
             onChangeText={(value) => update('customDescription', value)}
             maxLength={300}
@@ -139,6 +151,7 @@ export default function PersonaScreen() {
 
           <Text style={styles.fieldLabel}>말투 예시</Text>
           <TextInput
+            accessibilityLabel="말투 예시"
             value={draft.speechExample}
             onChangeText={(value) => update('speechExample', value)}
             maxLength={200}
@@ -152,7 +165,7 @@ export default function PersonaScreen() {
           <Text style={styles.counter}>{draft.speechExample.length}/200</Text>
         </View>
 
-        <Pressable onPress={() => void save()} style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" onPress={() => void save()} style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}>
           <Text style={styles.saveButtonText}>{saved ? '저장됐어요 ✓' : '페르소나 저장'}</Text>
         </Pressable>
       </ScrollView>
@@ -167,6 +180,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 18, paddingBottom: 40, backgroundColor: '#f5f8f4',
     borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#dde7df',
   },
+  backButton: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
+  backButtonText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   eyebrow: { color: '#247a52', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#183d2a', fontSize: 26, lineHeight: 35, fontWeight: '800', marginTop: 5 },
   description: { color: '#6d7c73', fontSize: 13, marginTop: 5 },
@@ -193,7 +208,7 @@ const styles = StyleSheet.create({
   toneDescription: { color: '#77857c', fontSize: 12, marginTop: 3 },
   levelRow: { marginBottom: 13 },
   levels: { flexDirection: 'row', gap: 8 },
-  level: { flex: 1, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#ccd9ce', backgroundColor: '#fff' },
+  level: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, borderWidth: 1, borderColor: '#ccd9ce', backgroundColor: '#fff' },
   levelSelected: { borderColor: '#247a52', backgroundColor: '#247a52' },
   levelText: { color: '#607068', fontSize: 13, fontWeight: '700' },
   levelTextSelected: { color: '#fff' },

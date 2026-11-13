@@ -2,29 +2,35 @@ import { router, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppIcon } from '@/components/app-icon';
 import { useAuth } from '@/context/auth';
 import { useConversation } from '@/context/conversation';
+import { usePlantCatalog } from '@/context/plant-catalog';
 import { usePlantProfile } from '@/context/plant-profile';
+import { colors, layout, radius, spacing } from '@/theme/tokens';
 
-type MenuCardProps = {
-  eyebrow: string;
+type ActionRowProps = {
+  icon: 'leaf-outline' | 'color-palette-outline' | 'settings-outline';
   title: string;
   description: string;
-  color: string;
   onPress: () => void;
 };
 
-function MenuCard({ eyebrow, title, description, color, onPress }: MenuCardProps) {
+function ActionRow({ icon, title, description, onPress }: ActionRowProps) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.menuCard, { backgroundColor: color }, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
     >
-      <Text style={styles.eyebrow}>{eyebrow}</Text>
-      <Text style={styles.menuTitle}>{title}</Text>
-      <Text numberOfLines={2} style={styles.menuDescription}>{description}</Text>
-      <Text style={styles.arrow}>→</Text>
+      <View style={styles.actionIcon}>
+        <AppIcon color={colors.brand} name={icon} size={21} />
+      </View>
+      <View style={styles.actionText}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        <Text numberOfLines={2} style={styles.actionDescription}>{description}</Text>
+      </View>
+      <AppIcon color={colors.textMuted} name="chevron-forward" size={20} />
     </Pressable>
   );
 }
@@ -32,13 +38,28 @@ function MenuCard({ eyebrow, title, description, color, onPress }: MenuCardProps
 export default function DashboardScreen() {
   const { session } = useAuth();
   const { profile } = usePlantProfile();
-  const { messages, resetConversation } = useConversation();
+  const { selectedPlant, isLoading: plantsLoading } = usePlantCatalog();
+  const { messages } = useConversation();
   const userName = session?.user.email?.split('@')[0] ?? '사용자';
   const lastMessage = [...messages].reverse().find((message) => message.sender === 'plant');
+  const plantName = selectedPlant?.name ?? profile.name;
+  const plantSpecies = selectedPlant?.species ?? profile.species;
+  const isCalibrated = !!selectedPlant
+    && selectedPlant.setupWeightG !== null
+    && selectedPlant.targetWetWeightG !== null
+    && selectedPlant.wateringTriggerWeightG !== null;
 
-  async function startNewConversation() {
-    await resetConversation();
-    router.push('/chat');
+  const status = plantsLoading
+    ? { label: '확인 중', title: '식물 정보를 불러오고 있어요', description: '잠시만 기다려 주세요.' }
+    : !selectedPlant
+      ? { label: '시작하기', title: '첫 식물을 등록해 주세요', description: '식물을 등록하면 상태 기록과 대화를 시작할 수 있어요.' }
+      : isCalibrated
+        ? { label: '측정 준비됨', title: '오늘 상태를 기록해 볼까요?', description: '기준 무게가 저장되어 있어 수분 상태를 계산할 수 있어요.' }
+        : { label: '설정 필요', title: '초기 무게 기준이 필요해요', description: '정확한 계산을 위해 화분의 기준 무게를 먼저 설정해 주세요.' };
+
+  function openPrimaryAction() {
+    if (!selectedPlant || !isCalibrated) router.push('/plants' as Href);
+    else router.push('/water' as Href);
   }
 
   return (
@@ -46,72 +67,96 @@ export default function DashboardScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.brand}>PlanTalk</Text>
-            <Text style={styles.greeting}>{userName}님, 반가워요.</Text>
+            <Text style={styles.brand}>PLANTALK</Text>
+            <Text accessibilityRole="header" style={styles.greeting}>{userName}님, 안녕하세요.</Text>
           </View>
-          <View style={styles.avatar}><Text style={styles.avatarText}>🌿</Text></View>
+          <View style={styles.headerIcon}>
+            <AppIcon color={colors.brand} name="leaf" size={24} />
+          </View>
         </View>
 
-        <View style={styles.plantCard}>
-          <View style={styles.plantVisual}><Text style={styles.plantEmoji}>🪴</Text></View>
-          <View style={styles.plantInfo}>
-            <Text style={styles.cardLabel}>현재 대화 상대</Text>
-            <Text style={styles.plantName}>{profile.name}</Text>
-            <Text style={styles.plantMeta}>{profile.species} · {profile.callingUser}라고 부르는 중</Text>
+        <View style={styles.statusCard}>
+          <View style={styles.statusTopRow}>
+            <View style={styles.plantIdentity}>
+              <View style={styles.plantIcon}>
+                <AppIcon color={colors.brandStrong} name="leaf" size={25} />
+              </View>
+              <View style={styles.plantText}>
+                <Text style={styles.plantName}>{plantName}</Text>
+                <Text style={styles.plantSpecies}>{plantSpecies}</Text>
+              </View>
+            </View>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgeText}>{status.label}</Text>
+            </View>
           </View>
-          <Pressable onPress={() => router.push('/persona')} style={styles.editButton}>
-            <Text style={styles.editButtonText}>편집</Text>
-          </Pressable>
+
+          <View style={styles.statusCopy}>
+            <Text style={styles.statusTitle}>{status.title}</Text>
+            <Text style={styles.statusDescription}>{status.description}</Text>
+          </View>
+
+          <View style={styles.primaryActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={openPrimaryAction}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            >
+              <AppIcon color={colors.surface} name={isCalibrated ? 'water-outline' : 'options-outline'} size={19} />
+              <Text style={styles.primaryButtonText}>{isCalibrated ? '오늘 상태 기록' : '초기 설정하기'}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/chat')}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+            >
+              <AppIcon color={colors.brand} name="chatbubble-ellipses-outline" size={19} />
+              <Text style={styles.secondaryButtonText}>대화하기</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>무엇을 할까요?</Text>
-          <Text style={styles.sectionDescription}>식물과의 대화와 성격을 한곳에서 관리해요.</Text>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>최근 대화</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/chat')} hitSlop={8}>
+            <Text style={styles.textLink}>전체 보기</Text>
+          </Pressable>
         </View>
-
-        <MenuCard
-          eyebrow="CHAT"
-          title="채팅 관리"
-          description={lastMessage?.text ?? '아직 대화가 없어요. 먼저 인사해 보세요.'}
-          color="#e2f2e6"
+        <Pressable
+          accessibilityRole="button"
           onPress={() => router.push('/chat')}
-        />
-        <View style={styles.inlineActions}>
-          <Pressable onPress={() => router.push('/chat')} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>이어가기</Text>
-          </Pressable>
-          <Pressable onPress={() => void startNewConversation()} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>새 대화</Text>
-          </Pressable>
-        </View>
+          style={({ pressed }) => [styles.messagePreview, pressed && styles.pressed]}
+        >
+          <View style={styles.messageIcon}>
+            <AppIcon color={colors.brand} name="chatbubble-ellipses" size={20} />
+          </View>
+          <View style={styles.messageText}>
+            <Text style={styles.messageName}>{plantName}</Text>
+            <Text numberOfLines={2} style={styles.messageBody}>
+              {lastMessage?.text ?? '아직 대화가 없어요. 먼저 인사해 보세요.'}
+            </Text>
+          </View>
+          <AppIcon color={colors.textMuted} name="chevron-forward" size={20} />
+        </Pressable>
 
-        <View style={styles.cardGrid}>
-          <MenuCard
-            eyebrow="MY PLANTS"
-            title="식물 관리"
-            description="화분별 기준 무게와 물주기 설정을 관리해요."
-            color="#e8f3df"
+        <Text accessibilityRole="header" style={styles.sectionTitleStandalone}>관리</Text>
+        <View style={styles.actionList}>
+          <ActionRow
+            icon="leaf-outline"
+            title="식물과 화분 설정"
+            description="식물 등록, 기준 무게와 참고 정보를 관리합니다."
             onPress={() => router.push('/plants' as Href)}
           />
-          <MenuCard
-            eyebrow="WATER BALANCE"
-            title="수분량 계산기"
-            description="급수량과 배수량, 무게 변화로 물주기 시점을 계산해요."
-            color="#dff1ee"
-            onPress={() => router.push('/water' as Href)}
-          />
-          <MenuCard
-            eyebrow="PERSONA"
-            title="페르소나 관리"
-            description="말투와 성격, 호칭을 바꿔요."
-            color="#fff1d9"
+          <ActionRow
+            icon="color-palette-outline"
+            title="대화 성격 설정"
+            description={`${plantName}의 말투와 호칭을 조절합니다.`}
             onPress={() => router.push('/persona')}
           />
-          <MenuCard
-            eyebrow="SETTINGS"
-            title="설정 관리"
-            description="계정과 저장 데이터를 확인해요."
-            color="#e7edf9"
+          <ActionRow
+            icon="settings-outline"
+            title="앱 설정"
+            description="계정과 저장 데이터를 확인합니다."
             onPress={() => router.push('/settings')}
           />
         </View>
@@ -121,39 +166,47 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#e8eee9' },
+  page: { flex: 1, backgroundColor: colors.canvas },
   content: {
-    width: '100%', maxWidth: 480, minHeight: '100%', alignSelf: 'center',
-    paddingHorizontal: 16, paddingTop: 18, paddingBottom: 32, backgroundColor: '#f7faf7',
-    borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#dde7df',
+    width: '100%', maxWidth: layout.maxContentWidth, minHeight: '100%', alignSelf: 'center',
+    paddingHorizontal: layout.pagePadding, paddingTop: spacing.lg, paddingBottom: spacing.xxl,
+    backgroundColor: colors.canvas,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
-  brand: { color: '#247a52', fontSize: 14, fontWeight: '800', letterSpacing: 0.8 },
-  greeting: { color: '#183d2a', fontSize: 22, lineHeight: 30, fontWeight: '800', marginTop: 3 },
-  avatar: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  avatarText: { fontSize: 23 },
-  plantCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 19, backgroundColor: '#245d42' },
-  plantVisual: { width: 54, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e5f3e8' },
-  plantEmoji: { fontSize: 30 },
-  plantInfo: { flex: 1, marginHorizontal: 11 },
-  cardLabel: { color: '#b9d7c4', fontSize: 11, fontWeight: '700' },
-  plantName: { color: '#fff', fontSize: 19, fontWeight: '800', marginTop: 3 },
-  plantMeta: { color: '#d7e8dc', fontSize: 11, marginTop: 4 },
-  editButton: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: '#fff' },
-  editButtonText: { color: '#245d42', fontSize: 12, fontWeight: '700' },
-  sectionHeading: { marginTop: 28, marginBottom: 13 },
-  sectionTitle: { color: '#183d2a', fontSize: 19, fontWeight: '800' },
-  sectionDescription: { color: '#718078', fontSize: 13, marginTop: 5 },
-  menuCard: { flex: 1, minHeight: 122, borderRadius: 18, padding: 17, overflow: 'hidden' },
-  eyebrow: { color: '#52705d', fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
-  menuTitle: { color: '#183d2a', fontSize: 19, fontWeight: '800', marginTop: 9 },
-  menuDescription: { color: '#536359', fontSize: 13, lineHeight: 19, marginTop: 7, paddingRight: 22 },
-  arrow: { color: '#247a52', fontSize: 25, position: 'absolute', right: 17, bottom: 14 },
-  inlineActions: { flexDirection: 'row', gap: 9, marginTop: 10 },
-  secondaryButton: { flex: 1, alignItems: 'center', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: '#b8cabc', backgroundColor: '#fff' },
-  secondaryButtonText: { color: '#346048', fontSize: 13, fontWeight: '700' },
-  primaryButton: { flex: 1, alignItems: 'center', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12, backgroundColor: '#247a52' },
-  primaryButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  cardGrid: { gap: 12, marginTop: 16 },
-  pressed: { opacity: 0.76 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl },
+  brand: { color: colors.brand, fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
+  greeting: { color: colors.text, fontSize: 24, lineHeight: 32, fontWeight: '800', marginTop: spacing.xs },
+  headerIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceBrand },
+  statusCard: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.brandStrong },
+  statusTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  plantIdentity: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  plantIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.brandSoft },
+  plantText: { flex: 1, marginLeft: spacing.md },
+  plantName: { color: colors.surface, fontSize: 18, fontWeight: '800' },
+  plantSpecies: { color: '#CFE1D5', fontSize: 13, marginTop: 3 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: '#2D6649' },
+  statusBadgeText: { color: colors.surface, fontSize: 11, fontWeight: '800' },
+  statusCopy: { marginTop: spacing.xl },
+  statusTitle: { color: colors.surface, fontSize: 21, lineHeight: 29, fontWeight: '800' },
+  statusDescription: { color: '#D3E4D9', fontSize: 14, lineHeight: 21, marginTop: spacing.xs },
+  primaryActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  primaryButton: { flex: 1.25, minHeight: 48, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.brand },
+  primaryButtonText: { color: colors.surface, fontSize: 14, fontWeight: '800' },
+  secondaryButton: { flex: 1, minHeight: 48, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.surface },
+  secondaryButtonText: { color: colors.brand, fontSize: 14, fontWeight: '800' },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xl, marginBottom: spacing.md },
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
+  textLink: { color: colors.brand, fontSize: 13, fontWeight: '700' },
+  messagePreview: { minHeight: 76, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border },
+  messageIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.surfaceBrand },
+  messageText: { flex: 1, marginHorizontal: spacing.md },
+  messageName: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  messageBody: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 3 },
+  sectionTitleStandalone: { color: colors.text, fontSize: 18, fontWeight: '800', marginTop: spacing.xl, marginBottom: spacing.sm },
+  actionList: { borderTopWidth: 1, borderColor: colors.border },
+  actionRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border },
+  actionIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.surface },
+  actionText: { flex: 1, marginHorizontal: spacing.md },
+  actionTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  actionDescription: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 3 },
+  pressed: { opacity: 0.72 },
 });

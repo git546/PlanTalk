@@ -24,6 +24,7 @@ def mock_authentication():
         patch("app.api.routes.chat.authenticate", new_callable=AsyncMock) as authenticate,
         patch("app.api.routes.chat.prepare_chat_context", new_callable=AsyncMock) as prepare,
         patch("app.api.routes.chat.remember_conversation", new_callable=AsyncMock) as remember,
+        patch("app.api.routes.chat.enrich_plant_reference", new_callable=AsyncMock) as enrich,
     ):
         authenticate.return_value = AuthenticatedUser(id="user-1", email="test@plantalk.local")
         prepare.side_effect = lambda _user_id, _token, plant, _settings: (
@@ -31,7 +32,8 @@ def mock_authentication():
             "plant-1" if plant else None,
             [],
         )
-        yield {"prepare": prepare, "remember": remember}
+        enrich.side_effect = lambda plant, _settings, **_kwargs: plant
+        yield {"prepare": prepare, "remember": remember, "enrich": enrich}
 
 
 def test_chat_contract_and_history():

@@ -8,6 +8,7 @@ from app.schemas.persona import PlantContext
 from app.services.auth import AuthenticatedUser, AuthError, authenticate
 from app.services.chat import ChatError, generate_reply
 from app.services.conversation_memory import prepare_chat_context, remember_conversation
+from app.services.species_reference import enrich_plant_reference
 
 router = APIRouter(tags=["chat"])
 
@@ -64,6 +65,12 @@ async def chat(
         access_token,
         request.plant,
         settings,
+    )
+    plant = await enrich_plant_reference(
+        plant,
+        settings,
+        plant_id=plant_id,
+        access_token=access_token,
     )
     try:
         reply = await generate_reply(

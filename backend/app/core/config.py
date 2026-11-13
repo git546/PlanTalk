@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_anon_key: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
+    perenual_api_key: SecretStr | None = None
+    perenual_api_base_url: str = "https://perenual.com/api/v2"
+    gbif_api_base_url: str = "https://api.gbif.org/v1"
 
 
 @lru_cache

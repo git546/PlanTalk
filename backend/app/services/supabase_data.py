@@ -47,7 +47,7 @@ async def get_or_create_plant(
     headers = _headers(settings, access_token)
     async with httpx.AsyncClient(timeout=12) as client:
         query_params = {
-            "select": "id,name",
+            "select": "id,name,care_overrides",
             "user_id": f"eq.{user_id}",
             "limit": "1",
         }
@@ -63,10 +63,15 @@ async def get_or_create_plant(
         if response.is_error:
             raise DataStoreError("식물 정보를 불러오지 못했습니다.")
         rows = response.json()
+        existing_care = rows[0].get("care_overrides", {}) if rows else {}
+        if not isinstance(existing_care, dict):
+            existing_care = {}
+        if plant.species:
+            existing_care["species_label"] = plant.species
         values = {
             "name": plant.name,
             "personality_overrides": plant.personality.model_dump(exclude_none=True),
-            "care_overrides": {"species_label": plant.species} if plant.species else {},
+            "care_overrides": existing_care,
         }
         if rows:
             plant_id = rows[0]["id"]

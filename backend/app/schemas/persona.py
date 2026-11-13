@@ -2,6 +2,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.species_reference import SpeciesCareReference
+
 ShortText = Annotated[str, Field(min_length=1, max_length=200)]
 MemoryText = Annotated[str, Field(min_length=1, max_length=500)]
 CustomDescription = Annotated[str, Field(min_length=1, max_length=300)]
@@ -33,3 +35,4 @@ class PlantContext(BaseModel):
     species: ShortText | None = None
     personality: PersonalityProfile = Field(default_factory=PersonalityProfile)
     memories: list[MemoryText] = Field(default_factory=list, max_length=20)
+    care_reference: SpeciesCareReference | None = None

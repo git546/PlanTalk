@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppIcon } from '@/components/app-icon';
 import { usePlantCatalog } from '@/context/plant-catalog';
 import {
   fetchWaterBalance,
@@ -23,6 +24,7 @@ import {
   recordManualWeight,
   type WaterHistoryItem,
 } from '@/lib/water-history';
+import { colors, radius, spacing } from '@/theme/tokens';
 
 type InputKey =
   | 'periodDays'
@@ -128,6 +130,7 @@ export default function WaterCalculatorScreen() {
   const [careVolume, setCareVolume] = useState('');
   const [careType, setCareType] = useState<'watering' | 'drainage'>('watering');
   const [recordMessage, setRecordMessage] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'record' | 'calculator'>('record');
 
   useEffect(() => {
     let active = true;
@@ -292,8 +295,27 @@ export default function WaterCalculatorScreen() {
         <Text style={styles.eyebrow}>WATER BALANCE</Text>
         <Text style={styles.title}>수분량 계산기</Text>
         <Text style={styles.description}>
-          화분 세팅 직후부터 누적된 급수량·배수량과 현재 무게로 수분 손실을 추정합니다.
+          오늘 측정값을 기록하고 필요할 때 상세 수분 계산을 실행합니다.
         </Text>
+
+        <View accessibilityRole="tablist" style={styles.segmentedNavigation}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeView === 'record' }}
+            onPress={() => setActiveView('record')}
+            style={[styles.segmentedButton, activeView === 'record' && styles.segmentedButtonSelected]}
+          >
+            <Text style={[styles.segmentedText, activeView === 'record' && styles.segmentedTextSelected]}>오늘 기록</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeView === 'calculator' }}
+            onPress={() => setActiveView('calculator')}
+            style={[styles.segmentedButton, activeView === 'calculator' && styles.segmentedButtonSelected]}
+          >
+            <Text style={[styles.segmentedText, activeView === 'calculator' && styles.segmentedTextSelected]}>상세 계산</Text>
+          </Pressable>
+        </View>
 
         {plants.length > 0 ? (
           <View style={styles.plantSelector}>
@@ -302,6 +324,8 @@ export default function WaterCalculatorScreen() {
               {plants.map((plant) => (
                 <Pressable
                   key={plant.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: plant.id === selectedPlantId }}
                   onPress={() => void choosePlant(plant.id)}
                   style={[styles.plantChip, plant.id === selectedPlantId && styles.plantChipSelected]}
                 >
@@ -315,7 +339,7 @@ export default function WaterCalculatorScreen() {
         <View style={styles.notice}>
           <View style={styles.noticeHeader}>
             <Text style={styles.noticeTitle}>{selectedPlant ? `${selectedPlant.name} 기준값` : '식물 등록 필요'}</Text>
-            <Pressable onPress={() => router.push('/plants' as Href)}>
+            <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push('/plants' as Href)}>
               <Text style={styles.noticeLink}>{selectedPlant ? '설정 변경' : '식물 추가'}</Text>
             </Pressable>
           </View>
@@ -328,6 +352,7 @@ export default function WaterCalculatorScreen() {
           )}
         </View>
 
+        {activeView === 'calculator' ? <>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>세팅 이후 누적 측정값</Text>
           <NumberInput
@@ -361,12 +386,15 @@ export default function WaterCalculatorScreen() {
 
         <View style={styles.actionRow}>
           <Pressable
+            accessibilityRole="button"
             onPress={() => { setValues(EMPTY_VALUES); setResult(null); setError(null); }}
             style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           >
             <Text style={styles.secondaryButtonText}>초기화</Text>
           </Pressable>
           <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: loading }}
             disabled={loading}
             onPress={() => void calculate()}
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, loading && styles.disabled]}
@@ -375,7 +403,7 @@ export default function WaterCalculatorScreen() {
           </Pressable>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
         {result ? (
           <View style={styles.resultCard}>
@@ -413,12 +441,18 @@ export default function WaterCalculatorScreen() {
             <Text style={styles.assumption}>{result.assumption} 수분 손실에는 식물의 증산과 흙 표면 증발이 모두 포함됩니다.</Text>
           </View>
         ) : null}
+        </> : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>측정·돌봄 기록</Text>
-          <Text style={styles.historyDescription}>
-            계산기의 누적값과 별개로, 실제로 방금 측정하거나 준 1회분만 저장합니다.
-          </Text>
+        {activeView === 'record' ? <View style={styles.section}>
+          <View style={styles.recordSectionHeading}>
+            <View style={styles.recordSectionIcon}>
+              <AppIcon color={colors.brand} name="water-outline" size={21} />
+            </View>
+            <View style={styles.recordSectionText}>
+              <Text style={styles.sectionTitle}>오늘 측정·돌봄 기록</Text>
+              <Text style={styles.historyDescription}>실제로 방금 측정하거나 준 1회분만 저장합니다.</Text>
+            </View>
+          </View>
 
           <Text style={styles.recordLabel}>현재 안정 무게</Text>
           <View style={styles.recordRow}>
@@ -433,6 +467,8 @@ export default function WaterCalculatorScreen() {
             />
             <Text style={styles.recordUnit}>g</Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: recording || !selectedPlantId }}
               disabled={recording || !selectedPlantId}
               onPress={() => void saveWeightRecord()}
               style={({ pressed }) => [
@@ -450,6 +486,8 @@ export default function WaterCalculatorScreen() {
             {(['watering', 'drainage'] as const).map((type) => (
               <Pressable
                 key={type}
+                accessibilityRole="button"
+                accessibilityState={{ selected: careType === type }}
                 onPress={() => setCareType(type)}
                 style={[styles.typeButton, careType === type && styles.typeButtonSelected]}
               >
@@ -474,6 +512,8 @@ export default function WaterCalculatorScreen() {
             />
             <Text style={styles.recordUnit}>mL</Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: recording || !selectedPlantId }}
               disabled={recording || !selectedPlantId}
               onPress={() => void saveCareRecord()}
               style={({ pressed }) => [
@@ -486,7 +526,7 @@ export default function WaterCalculatorScreen() {
             </Pressable>
           </View>
 
-          {recordMessage ? <Text style={styles.recordMessage}>{recordMessage}</Text> : null}
+          {recordMessage ? <Text accessibilityLiveRegion="polite" style={styles.recordMessage}>{recordMessage}</Text> : null}
 
           <View style={styles.historyDivider} />
           <Text style={styles.historyTitle}>최근 기록</Text>
@@ -507,7 +547,7 @@ export default function WaterCalculatorScreen() {
               ))}
             </View>
           )}
-        </View>
+        </View> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -523,6 +563,11 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#247a52', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#183d2a', fontSize: 26, lineHeight: 35, fontWeight: '800', marginTop: 5 },
   description: { color: '#66766d', fontSize: 13, lineHeight: 20, marginTop: 6 },
+  segmentedNavigation: { flexDirection: 'row', padding: 4, marginTop: spacing.lg, borderRadius: radius.md, backgroundColor: '#e7ece8' },
+  segmentedButton: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
+  segmentedButtonSelected: { backgroundColor: colors.surface },
+  segmentedText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  segmentedTextSelected: { color: colors.brand, fontWeight: '800' },
   plantSelector: { marginTop: 18 },
   selectorLabel: { color: '#405347', fontSize: 12, fontWeight: '800', marginBottom: 8 },
   plantChips: { gap: 8, paddingRight: 12 },
@@ -567,6 +612,9 @@ const styles = StyleSheet.create({
   warningText: { color: '#735927', fontSize: 11, lineHeight: 17, marginTop: 3 },
   assumption: { color: '#c8dfd0', fontSize: 10, lineHeight: 16, marginTop: 14 },
   historyDescription: { color: '#77857d', fontSize: 11, lineHeight: 17, marginTop: 4 },
+  recordSectionHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  recordSectionIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.surfaceBrand },
+  recordSectionText: { flex: 1, marginLeft: spacing.md },
   recordLabel: { color: '#405347', fontSize: 12, fontWeight: '800', marginTop: 16, marginBottom: 7 },
   recordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   recordInput: { flex: 1, minWidth: 0 },

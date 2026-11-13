@@ -68,7 +68,7 @@ export default function SettingsScreen() {
             <Text style={styles.localBadge}>혼합</Text>
           </View>
           <View style={styles.divider} />
-          <Pressable disabled={busy} onPress={confirmReset} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={confirmReset} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
             <Text style={styles.dangerText}>전체 데이터 초기화</Text>
           </Pressable>
         </View>
@@ -82,7 +82,7 @@ export default function SettingsScreen() {
           <Text style={styles.info}>Supabase 로그인과 Gemini 채팅을 사용하는 개발 버전입니다.</Text>
         </View>
 
-        <Pressable disabled={busy} onPress={() => void logout()} style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void logout()} style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}>
           <Text style={styles.logoutText}>{busy ? '처리 중…' : '로그아웃'}</Text>
         </Pressable>
       </ScrollView>

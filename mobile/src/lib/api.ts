@@ -20,6 +20,56 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return response.json() as Promise<HealthResponse>;
 }
 
+export type SpeciesReference = {
+  query: string;
+  normalized_query: string;
+  common_name: string | null;
+  scientific_names: string[];
+  watering: string | null;
+  sunlight: string[];
+  care_level: string | null;
+  indoor: boolean | null;
+  cycle: string | null;
+  taxonomy: {
+    scientific_name: string | null;
+    canonical_name: string | null;
+    family: string | null;
+    genus: string | null;
+    rank: string | null;
+    status: string | null;
+    confidence: number | null;
+  } | null;
+  sources: string[];
+  source_urls: string[];
+  warnings: string[];
+};
+
+export type SpeciesReferenceResponse = {
+  reference: SpeciesReference;
+  usage: string;
+};
+
+export async function fetchSpeciesReference(
+  query: string,
+  plantId?: string,
+  refresh = false,
+): Promise<SpeciesReferenceResponse> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error('로그인이 필요합니다.');
+  const params = new URLSearchParams({ q: query });
+  if (plantId) params.set('plant_id', plantId);
+  if (refresh) params.set('refresh', 'true');
+  const response = await fetch(`${API_URL}/api/species-reference?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(typeof data.detail === 'string' ? data.detail : '식물 참고 정보를 찾지 못했습니다.');
+  }
+  return data as SpeciesReferenceResponse;
+}
+
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export type PlantPersonality = {
