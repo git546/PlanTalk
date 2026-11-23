@@ -2,7 +2,7 @@
 #include <HX711.h>
 
 // PlanTalk Arduino Uno integrated sensor firmware.
-// Each valid sample is emitted as one JSON object at 9600 baud.
+// Every sampling attempt emits JSON, including HX711 faults and boot events.
 
 constexpr uint8_t HX711_DOUT_PIN = 2;
 constexpr uint8_t HX711_SCK_PIN = 3;
@@ -14,6 +14,7 @@ constexpr uint32_t SERIAL_BAUD = 9600;
 constexpr uint32_t SAMPLE_INTERVAL_MS = 2000;
 constexpr uint8_t LOAD_CELL_AVERAGE_COUNT = 10;
 constexpr uint8_t ANALOG_AVERAGE_COUNT = 10;
+constexpr char FIRMWARE_VERSION[] = "0.2.0";
 
 DHT dht(DHT_PIN, DHT11);
 HX711 scale;
@@ -38,6 +39,52 @@ void printOptionalFloat(float value, uint8_t digits) {
   Serial.print(value, digits);
 }
 
+void printBootEvent() {
+  Serial.print(F("{\"sequence_no\":0,\"device_uptime_ms\":"));
+  Serial.print(millis());
+  Serial.print(F(",\"status\":\"boot\",\"hx711_ready\":"));
+  Serial.print(scale.is_ready() ? F("true") : F("false"));
+  Serial.print(F(",\"raw_sensor_value\":null,\"firmware_version\":\""));
+  Serial.print(FIRMWARE_VERSION);
+  Serial.println(F("\"}"));
+}
+
+void printSample(
+  uint32_t sampleStartedAt,
+  bool hx711Ready,
+  long loadCellRaw,
+  int soilRaw,
+  int lightRaw,
+  float temperature,
+  float humidity
+) {
+  Serial.print(F("{\"sequence_no\":"));
+  Serial.print(sequenceNumber);
+  Serial.print(F(",\"device_uptime_ms\":"));
+  Serial.print(sampleStartedAt);
+  Serial.print(F(",\"status\":\""));
+  Serial.print(hx711Ready ? F("ok") : F("hx711_not_ready"));
+  Serial.print(F("\",\"hx711_ready\":"));
+  Serial.print(hx711Ready ? F("true") : F("false"));
+  Serial.print(F(",\"raw_sensor_value\":"));
+  if (hx711Ready) {
+    Serial.print(loadCellRaw);
+  } else {
+    Serial.print(F("null"));
+  }
+  Serial.print(F(",\"soil_raw\":"));
+  Serial.print(soilRaw);
+  Serial.print(F(",\"light_raw\":"));
+  Serial.print(lightRaw);
+  Serial.print(F(",\"temperature_c\":"));
+  printOptionalFloat(temperature, 1);
+  Serial.print(F(",\"humidity_percent\":"));
+  printOptionalFloat(humidity, 1);
+  Serial.print(F(",\"firmware_version\":\""));
+  Serial.print(FIRMWARE_VERSION);
+  Serial.println(F("\"}"));
+}
+
 void setup() {
   Serial.begin(SERIAL_BAUD);
   dht.begin();
@@ -46,6 +93,7 @@ void setup() {
   // Lines beginning with # are ignored by the PlanTalk JSONL gateway.
   Serial.println(F("# PlanTalk integrated sensor firmware started"));
   Serial.println(F("# HX711=D2/D3 DHT11=D4 SOIL=A0 LIGHT=A1 BAUD=9600"));
+  printBootEvent();
 }
 
 void loop() {
@@ -55,32 +103,22 @@ void loop() {
   }
   lastSampleStartedAt = now;
 
-  if (!scale.is_ready()) {
-    Serial.println(F("# HX711 not ready; sample skipped"));
-    return;
-  }
-
-  const long loadCellRaw = scale.read_average(LOAD_CELL_AVERAGE_COUNT);
+  ++sequenceNumber;
+  const bool hx711Ready = scale.is_ready();
+  const long loadCellRaw = hx711Ready
+    ? scale.read_average(LOAD_CELL_AVERAGE_COUNT)
+    : 0;
   const int soilRaw = readAnalogAverage(SOIL_PIN);
   const int lightRaw = readAnalogAverage(LIGHT_PIN);
   const float humidity = dht.readHumidity();
   const float temperature = dht.readTemperature();
-
-  ++sequenceNumber;
-
-  Serial.print(F("{\"sequence_no\":"));
-  Serial.print(sequenceNumber);
-  Serial.print(F(",\"device_uptime_ms\":"));
-  Serial.print(now);
-  Serial.print(F(",\"raw_sensor_value\":"));
-  Serial.print(loadCellRaw);
-  Serial.print(F(",\"soil_raw\":"));
-  Serial.print(soilRaw);
-  Serial.print(F(",\"light_raw\":"));
-  Serial.print(lightRaw);
-  Serial.print(F(",\"temperature_c\":"));
-  printOptionalFloat(temperature, 1);
-  Serial.print(F(",\"humidity_percent\":"));
-  printOptionalFloat(humidity, 1);
-  Serial.println(F("}"));
+  printSample(
+    now,
+    hx711Ready,
+    loadCellRaw,
+    soilRaw,
+    lightRaw,
+    temperature,
+    humidity
+  );
 }

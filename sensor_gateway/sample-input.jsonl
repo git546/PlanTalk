@@ -1,0 +1,6 @@
+{"measured_at":"2026-11-13T12:30:00Z","weight_g":3800.5,"raw_sensor_value":836110,"sequence_no":1,"temperature_c":24.1,"humidity_percent":55.2,"light_lux":12000}
+{"measured_at":"2026-11-13T12:30:01Z","weight_g":3800.1,"raw_sensor_value":836022,"sequence_no":2,"temperature_c":24.1,"humidity_percent":55.2,"light_lux":12000}
+{"measured_at":"2026-11-13T12:30:02Z","weight_g":3799.9,"raw_sensor_value":835978,"sequence_no":3,"temperature_c":24.1,"humidity_percent":55.3,"light_lux":11990}
+{"measured_at":"2026-11-13T12:30:03Z","weight_g":3800.2,"raw_sensor_value":836044,"sequence_no":4,"temperature_c":24.1,"humidity_percent":55.3,"light_lux":11990}
+{"measured_at":"2026-11-13T12:30:04Z","weight_g":3800.0,"raw_sensor_value":836000,"sequence_no":5,"temperature_c":24.1,"humidity_percent":55.2,"light_lux":12010}
+

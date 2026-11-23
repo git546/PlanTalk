@@ -18,6 +18,12 @@ node_modules/
 .expo/
 dist/
 web-build/
+lab/water_calculator/sessions/
+sensor_gateway/.env.gateway
+sensor_gateway/data/
+sensor_gateway/exports/
+sensor_gateway/release/
+.build/
 
 # Editors / OS
 .DS_Store
