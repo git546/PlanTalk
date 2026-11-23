@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { router, type Href } from 'expo-router';
 import {
   ActivityIndicator,
@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { usePlantCatalog } from '@/context/plant-catalog';
+import { useWaterHistory } from '@/hooks/use-water-history';
 import {
   fetchWaterBalance,
   type WaterBalanceRequest,
@@ -22,8 +23,9 @@ import {
   loadWaterHistory,
   recordManualCareEvent,
   recordManualWeight,
-  type WaterHistoryItem,
 } from '@/lib/water-history';
+import type { WaterHistoryItem } from '@/lib/water-history-transform';
+import { parseLocalizedNumber } from '@/lib/number-input';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type InputKey =
@@ -87,12 +89,6 @@ function NumberInput({
   );
 }
 
-function parseNumber(value: string): number | null {
-  if (!value.trim()) return null;
-  const parsed = Number(value.trim().replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function ResultItem({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.resultItem}>
@@ -123,40 +119,18 @@ export default function WaterCalculatorScreen() {
   const [result, setResult] = useState<WaterBalanceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<WaterHistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordWeight, setRecordWeight] = useState('');
   const [careVolume, setCareVolume] = useState('');
   const [careType, setCareType] = useState<'watering' | 'drainage'>('watering');
   const [recordMessage, setRecordMessage] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'record' | 'calculator'>('record');
-
-  useEffect(() => {
-    let active = true;
-    async function loadHistory() {
-      if (!selectedPlantId) {
-        setHistory([]);
-        return;
-      }
-      setHistoryLoading(true);
-      setRecordMessage(null);
-      try {
-        const items = await loadWaterHistory(selectedPlantId);
-        if (active) setHistory(items);
-      } catch (reason) {
-        if (active) {
-          setRecordMessage(
-            reason instanceof Error ? reason.message : '측정 이력을 불러오지 못했습니다.',
-          );
-        }
-      } finally {
-        if (active) setHistoryLoading(false);
-      }
-    }
-    void loadHistory();
-    return () => { active = false; };
-  }, [selectedPlantId]);
+  const {
+    items: history,
+    isLoading: historyLoading,
+    error: historyError,
+    refresh: refreshHistory,
+  } = useWaterHistory(selectedPlantId, loadWaterHistory);
 
   async function choosePlant(plantId: string) {
     setValues(EMPTY_VALUES);
@@ -168,17 +142,12 @@ export default function WaterCalculatorScreen() {
     await selectPlant(plantId);
   }
 
-  async function refreshHistory() {
-    if (!selectedPlantId) return;
-    setHistory(await loadWaterHistory(selectedPlantId));
-  }
-
   async function saveWeightRecord() {
     if (!selectedPlantId) {
       setRecordMessage('먼저 식물을 선택해 주세요.');
       return;
     }
-    const weight = parseNumber(recordWeight || values.currentWeight);
+    const weight = parseLocalizedNumber(recordWeight || values.currentWeight);
     if (weight === null || weight <= 0) {
       setRecordMessage('기록할 현재 무게를 0보다 큰 숫자로 입력해 주세요.');
       return;
@@ -187,9 +156,13 @@ export default function WaterCalculatorScreen() {
     setRecordMessage(null);
     try {
       await recordManualWeight(selectedPlantId, weight);
-      await refreshHistory();
+      const refreshed = await refreshHistory();
       setRecordWeight('');
-      setRecordMessage('현재 무게를 Supabase에 기록했습니다.');
+      setRecordMessage(
+        refreshed
+          ? '현재 무게를 Supabase에 기록했습니다.'
+          : '무게는 저장했지만 최근 기록을 새로 불러오지 못했습니다.',
+      );
     } catch (reason) {
       setRecordMessage(reason instanceof Error ? reason.message : '무게를 기록하지 못했습니다.');
     } finally {
@@ -202,7 +175,7 @@ export default function WaterCalculatorScreen() {
       setRecordMessage('먼저 식물을 선택해 주세요.');
       return;
     }
-    const volume = parseNumber(careVolume);
+    const volume = parseLocalizedNumber(careVolume);
     if (volume === null || volume <= 0) {
       setRecordMessage('이번 1회 급수·배수량을 0보다 큰 숫자로 입력해 주세요.');
       return;
@@ -211,9 +184,13 @@ export default function WaterCalculatorScreen() {
     setRecordMessage(null);
     try {
       await recordManualCareEvent(selectedPlantId, careType, volume);
-      await refreshHistory();
+      const refreshed = await refreshHistory();
       setCareVolume('');
-      setRecordMessage(`${careType === 'watering' ? '급수' : '배수'} 기록을 저장했습니다.`);
+      setRecordMessage(
+        refreshed
+          ? `${careType === 'watering' ? '급수' : '배수'} 기록을 저장했습니다.`
+          : `${careType === 'watering' ? '급수' : '배수'} 기록은 저장했지만 목록을 새로 불러오지 못했습니다.`,
+      );
     } catch (reason) {
       setRecordMessage(
         reason instanceof Error ? reason.message : '급수·배수 기록을 저장하지 못했습니다.',
@@ -235,10 +212,10 @@ export default function WaterCalculatorScreen() {
       || selectedPlant.wateringTriggerWeightG === null
     ) return null;
     const required = {
-      period_days: parseNumber(values.periodDays),
-      end_pot_weight_g: parseNumber(values.currentWeight),
-      water_added_ml: parseNumber(values.waterAdded),
-      drainage_ml: parseNumber(values.drainage),
+      period_days: parseLocalizedNumber(values.periodDays),
+      end_pot_weight_g: parseLocalizedNumber(values.currentWeight),
+      water_added_ml: parseLocalizedNumber(values.waterAdded),
+      drainage_ml: parseLocalizedNumber(values.drainage),
     };
     if (Object.values(required).some((value) => value === null)) return null;
 
@@ -526,7 +503,11 @@ export default function WaterCalculatorScreen() {
             </Pressable>
           </View>
 
-          {recordMessage ? <Text accessibilityLiveRegion="polite" style={styles.recordMessage}>{recordMessage}</Text> : null}
+          {recordMessage || historyError ? (
+            <Text accessibilityLiveRegion="polite" style={styles.recordMessage}>
+              {recordMessage ?? historyError}
+            </Text>
+          ) : null}
 
           <View style={styles.historyDivider} />
           <Text style={styles.historyTitle}>최근 기록</Text>

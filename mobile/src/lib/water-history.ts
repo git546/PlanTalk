@@ -1,25 +1,12 @@
 import { supabase } from '@/lib/supabase';
+import {
+  mergeWaterHistory,
+  type CareEventHistoryRow,
+  type WaterHistoryItem,
+  type WeightHistoryRow,
+} from '@/lib/water-history-transform';
 
-export type WaterHistoryItem = {
-  id: string;
-  kind: 'weight' | 'watering' | 'drainage';
-  value: number;
-  unit: 'g' | 'mL';
-  occurredAt: string;
-};
-
-type WeightRow = {
-  id: number | string;
-  weight_g: number | string;
-  measured_at: string;
-};
-
-type CareEventRow = {
-  id: number | string;
-  event_type: 'watering' | 'drainage';
-  volume_ml: number | string;
-  occurred_at: string;
-};
+export type { WaterHistoryItem } from '@/lib/water-history-transform';
 
 function fail(action: string, detail?: string): Error {
   return new Error(detail ? `${action} (${detail})` : action);
@@ -51,23 +38,11 @@ export async function loadWaterHistory(
     throw fail('급수·배수 이력을 불러오지 못했습니다.', events.error.message);
   }
 
-  const weightItems = ((measurements.data ?? []) as WeightRow[]).map((row) => ({
-    id: `weight-${row.id}`,
-    kind: 'weight' as const,
-    value: Number(row.weight_g),
-    unit: 'g' as const,
-    occurredAt: row.measured_at,
-  }));
-  const eventItems = ((events.data ?? []) as CareEventRow[]).map((row) => ({
-    id: `event-${row.id}`,
-    kind: row.event_type,
-    value: Number(row.volume_ml),
-    unit: 'mL' as const,
-    occurredAt: row.occurred_at,
-  }));
-  return [...weightItems, ...eventItems]
-    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
-    .slice(0, limit);
+  return mergeWaterHistory(
+    (measurements.data ?? []) as WeightHistoryRow[],
+    (events.data ?? []) as CareEventHistoryRow[],
+    limit,
+  );
 }
 
 export async function recordManualWeight(plantId: string, weightG: number): Promise<void> {
