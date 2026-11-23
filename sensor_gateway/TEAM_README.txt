@@ -3,12 +3,13 @@ PlanTalk 센서 게이트웨이
 
 1. ZIP 파일을 새 폴더에 압축 해제합니다.
 2. 이전에 전달받은 .env.gateway를 EXE와 같은 폴더로 옮깁니다.
-3. 아두이노에 plantalk_uno.ino 통합 코드를 업로드합니다.
-4. Arduino IDE의 시리얼 모니터를 닫습니다.
-5. 아두이노를 USB로 연결합니다.
-6. PlanTalk-Sensor-Gateway.exe를 실행합니다.
-7. 화면 순서대로 연결 확인, 영점 측정, 기준 추 측정을 진행합니다.
-8. 수집 시작을 누릅니다.
+3. .env.gateway의 GATEWAY_EMIT_INTERVAL_SECONDS 값을 600으로 바꿉니다.
+4. 아두이노에 plantalk_uno.ino 통합 코드를 업로드합니다.
+5. Arduino IDE의 시리얼 모니터를 닫습니다.
+6. 아두이노를 USB로 연결합니다.
+7. PlanTalk-Sensor-Gateway.exe를 실행합니다.
+8. 화면 순서대로 연결 확인, 영점 측정, 기준 추 측정을 진행합니다.
+9. 수집 시작을 누릅니다.
 
 주의사항
 --------

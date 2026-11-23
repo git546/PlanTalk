@@ -13,6 +13,7 @@ from sensor_gateway.adapters import (
     SimulatorAdapter,
     resolve_serial_port,
 )
+from sensor_gateway.adaptive_sampling import AdaptiveSamplingPolicy
 from sensor_gateway.cli import calculate_calibration
 from sensor_gateway.config import GatewayConfig
 from sensor_gateway.models import CareEvent, FieldMapping, RawSample
@@ -50,6 +51,75 @@ class FakeSerial:
 
 
 class GatewayTests(unittest.TestCase):
+    @staticmethod
+    def _measurement(at: str, weight_g: float, sequence_no: int):
+        from sensor_gateway.models import NormalizedMeasurement
+
+        return NormalizedMeasurement(
+            measured_at=at,
+            weight_g=weight_g,
+            sequence_no=sequence_no,
+            raw_sensor_value=None,
+            sample_count=20,
+            is_stable=True,
+        )
+
+    def test_adaptive_policy_uses_routine_interval(self) -> None:
+        policy = AdaptiveSamplingPolicy(
+            routine_interval_seconds=600,
+            watering_detection_enabled=False,
+            watering_min_increase_g=10,
+            watering_confirm_seconds=30,
+            watering_burst_interval_seconds=60,
+            watering_burst_duration_seconds=1800,
+        )
+        first = policy.observe(
+            self._measurement("2026-11-24T00:00:00+00:00", 1000, 1)
+        )
+        early = policy.observe(
+            self._measurement("2026-11-24T00:09:59+00:00", 999, 2)
+        )
+        due = policy.observe(
+            self._measurement("2026-11-24T00:10:00+00:00", 998, 3)
+        )
+        self.assertTrue(first.should_emit)
+        self.assertFalse(early.should_emit)
+        self.assertTrue(due.should_emit)
+
+    def test_adaptive_policy_detects_watering_and_enters_burst(self) -> None:
+        policy = AdaptiveSamplingPolicy(
+            routine_interval_seconds=600,
+            watering_detection_enabled=True,
+            watering_min_increase_g=10,
+            watering_confirm_seconds=30,
+            watering_burst_interval_seconds=60,
+            watering_burst_duration_seconds=1800,
+        )
+        baseline = policy.observe(
+            self._measurement("2026-11-24T00:00:00+00:00", 1000, 1)
+        )
+        pending = policy.observe(
+            self._measurement("2026-11-24T00:01:00+00:00", 1012, 2)
+        )
+        confirmed = policy.observe(
+            self._measurement("2026-11-24T00:01:30+00:00", 1013, 3)
+        )
+        burst_early = policy.observe(
+            self._measurement("2026-11-24T00:02:00+00:00", 1011, 4)
+        )
+        burst_due = policy.observe(
+            self._measurement("2026-11-24T00:02:30+00:00", 1010, 5)
+        )
+        self.assertTrue(baseline.should_emit)
+        self.assertFalse(pending.should_emit)
+        self.assertTrue(confirmed.should_emit)
+        self.assertEqual(confirmed.mode, "watering_burst")
+        self.assertIsNotNone(confirmed.watering_details)
+        assert confirmed.watering_details is not None
+        self.assertEqual(confirmed.watering_details["increase_g"], 13)
+        self.assertFalse(burst_early.should_emit)
+        self.assertTrue(burst_due.should_emit)
+
     def test_nested_json_mapping(self) -> None:
         stream = StringIO(
             '{"data":{"time":"2026-11-13T12:30:00Z",'
@@ -329,6 +399,50 @@ class GatewayTests(unittest.TestCase):
             self.assertIn("arduino_boot", event_types)
             self.assertIn("hx711_not_ready", event_types)
             self.assertIn("hx711_recovered", event_types)
+
+    def test_service_records_suspected_watering(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = GatewayConfig(
+                db_path=Path(temp_dir) / "gateway.sqlite3",
+                external_device_id="device-1",
+                stability_window_size=2,
+                stability_max_range_g=2,
+                emit_interval_seconds=600,
+                watering_detection_enabled=True,
+                watering_min_increase_g=10,
+                watering_confirm_seconds=2,
+                watering_burst_interval_seconds=60,
+                watering_burst_duration_seconds=1800,
+            )
+            store = GatewayStore(config.db_path)
+            samples = [
+                RawSample(
+                    captured_at="2026-11-24T00:00:00+00:00",
+                    weight_g=1000,
+                ),
+                RawSample(
+                    captured_at="2026-11-24T00:00:02+00:00",
+                    weight_g=1000,
+                ),
+                RawSample(
+                    captured_at="2026-11-24T00:00:04+00:00",
+                    weight_g=1015,
+                ),
+                RawSample(
+                    captured_at="2026-11-24T00:00:06+00:00",
+                    weight_g=1015,
+                ),
+                RawSample(
+                    captured_at="2026-11-24T00:00:08+00:00",
+                    weight_g=1015,
+                ),
+            ]
+            summary = GatewayService(config, store).run(samples)
+            event_types = {
+                row["event_type"] for row in store.recent_gateway_events(20)
+            }
+            self.assertIn("watering_suspected", event_types)
+            self.assertEqual(summary.normalized_measurements, 2)
 
 
 if __name__ == "__main__":

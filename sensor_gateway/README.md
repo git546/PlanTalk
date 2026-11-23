@@ -13,6 +13,8 @@ Arduino COM 포트 / JSONL 파일 / 시뮬레이터
               ↓
         안정 구간 중앙값 판정
               ↓
+   평상시 10분 / 급수 후 1분 적응형 전송
+              ↓
       정규화 측정값 + durable outbox
               ↓
     Supabase authenticated 사용자로 전송
@@ -122,6 +124,7 @@ python -m sensor_gateway contract
 - `hx711_not_ready`, `hx711_recovered`
 - `serial_connected`, `serial_disconnected`
 - `collection_gap_power_or_restart`, `collection_gap_device_running`
+- `watering_suspected`
 
 팀원 프로그램이 다른 필드명을 사용해도 `.env.gateway`에서 매핑할 수 있습니다.
 
@@ -150,6 +153,20 @@ GATEWAY_RAW_GRAMS_PER_UNIT=0.004545
 
 `soil_raw`와 `light_raw`는 퍼센트나 lux로 바꾸지 않고 원본 보조값으로 보존합니다. 안정 구간이
 만들어질 때 두 값의 중앙값도 Supabase `raw_payload`에 함께 저장합니다.
+
+원격 측정값은 평상시 10분 간격으로 줄여 저장합니다. 안정된 화분 무게가 기준보다 10g 이상
+증가한 상태로 30초간 유지되면 `watering_suspected` 진단 이벤트를 기록하고, 배수 변화를
+놓치지 않도록 30분 동안 1분 간격으로 저장한 뒤 자동으로 평상시 간격으로 돌아갑니다.
+아두이노의 2초 원본은 이 전송 간격과 관계없이 PC SQLite에 계속 보존됩니다.
+
+```env
+GATEWAY_EMIT_INTERVAL_SECONDS=600
+GATEWAY_WATERING_DETECTION_ENABLED=true
+GATEWAY_WATERING_MIN_INCREASE_G=10
+GATEWAY_WATERING_CONFIRM_SECONDS=30
+GATEWAY_WATERING_BURST_INTERVAL_SECONDS=60
+GATEWAY_WATERING_BURST_DURATION_SECONDS=1800
+```
 
 ## 6. 저장된 로그 재생
 

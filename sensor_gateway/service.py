@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Iterable, Optional, Protocol
 from uuid import uuid4
 
+from .adaptive_sampling import AdaptiveSamplingPolicy
 from .config import GatewayConfig
 from .models import (
     CareEvent,
@@ -51,9 +52,25 @@ class GatewayService:
         self.filter = StabilityFilter(
             window_size=config.stability_window_size,
             max_range_g=config.stability_max_range_g,
-            emit_interval_seconds=config.emit_interval_seconds,
+            emit_interval_seconds=0,
             firmware_version=config.firmware_version,
         )
+        self.sampling_policy = AdaptiveSamplingPolicy(
+            routine_interval_seconds=config.emit_interval_seconds,
+            watering_detection_enabled=config.watering_detection_enabled,
+            watering_min_increase_g=config.watering_min_increase_g,
+            watering_confirm_seconds=config.watering_confirm_seconds,
+            watering_burst_interval_seconds=(
+                config.watering_burst_interval_seconds
+            ),
+            watering_burst_duration_seconds=(
+                config.watering_burst_duration_seconds
+            ),
+        )
+
+    def _reset_sampling(self) -> None:
+        self.filter.reset()
+        self.sampling_policy.reset()
 
     def record_gateway_event(
         self,
@@ -131,7 +148,7 @@ class GatewayService:
                         details=details,
                     )
                 )
-                self.filter.reset()
+                self._reset_sampling()
             elif wall_gap > gap_threshold and uptime_gap < wall_gap * 0.25:
                 created += int(
                     self.record_gateway_event(
@@ -141,7 +158,7 @@ class GatewayService:
                         details=details,
                     )
                 )
-                self.filter.reset()
+                self._reset_sampling()
             elif wall_gap > gap_threshold and uptime_gap > wall_gap * 0.75:
                 created += int(
                     self.record_gateway_event(
@@ -163,7 +180,7 @@ class GatewayService:
                     },
                 )
             )
-            self.filter.reset()
+            self._reset_sampling()
 
         if sample.sensor_status != previous_status:
             if sample.sensor_status == "hx711_not_ready":
@@ -175,7 +192,7 @@ class GatewayService:
                         details={"device_uptime_ms": uptime_ms},
                     )
                 )
-                self.filter.reset()
+                self._reset_sampling()
             elif previous_status == "hx711_not_ready" and sample.sensor_status == "ok":
                 created += int(
                     self.record_gateway_event(
@@ -184,7 +201,7 @@ class GatewayService:
                         details={"device_uptime_ms": uptime_ms},
                     )
                 )
-                self.filter.reset()
+                self._reset_sampling()
 
         if uptime_ms is not None:
             self.store.set_metadata(prefix + "uptime_ms", str(uptime_ms))
@@ -212,7 +229,7 @@ class GatewayService:
                 )
                 if not sample.has_load_cell_value or sample.sensor_status != "ok":
                     status_count += 1
-                    self.filter.reset()
+                    self._reset_sampling()
                     if upload and self.uploader is not None:
                         batch_sent, batch_failed = self.flush_outbox()
                         sent += batch_sent
@@ -224,6 +241,31 @@ class GatewayService:
                 )
                 if measurement is None:
                     continue
+                decision = self.sampling_policy.observe(measurement)
+                if decision.watering_details is not None:
+                    self.record_gateway_event(
+                        "watering_suspected",
+                        occurred_at=measurement.measured_at,
+                        details={
+                            **decision.watering_details,
+                            "threshold_g": self.config.watering_min_increase_g,
+                            "burst_interval_seconds": (
+                                self.config.watering_burst_interval_seconds
+                            ),
+                            "burst_duration_seconds": (
+                                self.config.watering_burst_duration_seconds
+                            ),
+                        },
+                    )
+                if not decision.should_emit:
+                    continue
+                measurement = replace(
+                    measurement,
+                    raw_payload={
+                        **measurement.raw_payload,
+                        "sampling_mode": decision.mode,
+                    },
+                )
                 if self.store.enqueue_measurement(
                     self.config.external_device_id,
                     measurement,

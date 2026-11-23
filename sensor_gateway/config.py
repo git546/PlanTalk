@@ -34,6 +34,17 @@ def _int(env: Mapping[str, str], key: str, default: int) -> int:
     return int(value) if value else default
 
 
+def _bool(env: Mapping[str, str], key: str, default: bool) -> bool:
+    value = env.get(key, "").strip().lower()
+    if not value:
+        return default
+    if value in {"true", "1", "yes", "on"}:
+        return True
+    if value in {"false", "0", "no", "off"}:
+        return False
+    raise ValueError(f"{key}는 true 또는 false여야 합니다.")
+
+
 def _optional_float(env: Mapping[str, str], key: str) -> Optional[float]:
     value = env.get(key, "").strip()
     return float(value) if value else None
@@ -49,7 +60,12 @@ class GatewayConfig:
     firmware_version: Optional[str] = None
     stability_window_size: int = 20
     stability_max_range_g: float = 3.0
-    emit_interval_seconds: float = 60.0
+    emit_interval_seconds: float = 600.0
+    watering_detection_enabled: bool = True
+    watering_min_increase_g: float = 10.0
+    watering_confirm_seconds: float = 30.0
+    watering_burst_interval_seconds: float = 60.0
+    watering_burst_duration_seconds: float = 1800.0
     upload_batch_size: int = 50
     serial_port: str = "auto"
     serial_baud: int = 9600
@@ -96,7 +112,32 @@ class GatewayConfig:
             emit_interval_seconds=_float(
                 env,
                 "GATEWAY_EMIT_INTERVAL_SECONDS",
+                600.0,
+            ),
+            watering_detection_enabled=_bool(
+                env,
+                "GATEWAY_WATERING_DETECTION_ENABLED",
+                True,
+            ),
+            watering_min_increase_g=_float(
+                env,
+                "GATEWAY_WATERING_MIN_INCREASE_G",
+                10.0,
+            ),
+            watering_confirm_seconds=_float(
+                env,
+                "GATEWAY_WATERING_CONFIRM_SECONDS",
+                30.0,
+            ),
+            watering_burst_interval_seconds=_float(
+                env,
+                "GATEWAY_WATERING_BURST_INTERVAL_SECONDS",
                 60.0,
+            ),
+            watering_burst_duration_seconds=_float(
+                env,
+                "GATEWAY_WATERING_BURST_DURATION_SECONDS",
+                1800.0,
             ),
             upload_batch_size=_int(env, "GATEWAY_UPLOAD_BATCH_SIZE", 50),
             serial_port=env.get("GATEWAY_SERIAL_PORT", "auto").strip() or "auto",
@@ -165,6 +206,18 @@ class GatewayConfig:
             raise ValueError("GATEWAY_STABILITY_MAX_RANGE_G는 0 이상이어야 합니다.")
         if self.emit_interval_seconds < 0:
             raise ValueError("GATEWAY_EMIT_INTERVAL_SECONDS는 0 이상이어야 합니다.")
+        if self.watering_min_increase_g <= 0:
+            raise ValueError("GATEWAY_WATERING_MIN_INCREASE_G는 0보다 커야 합니다.")
+        if self.watering_confirm_seconds < 0:
+            raise ValueError("GATEWAY_WATERING_CONFIRM_SECONDS는 0 이상이어야 합니다.")
+        if self.watering_burst_interval_seconds <= 0:
+            raise ValueError(
+                "GATEWAY_WATERING_BURST_INTERVAL_SECONDS는 0보다 커야 합니다."
+            )
+        if self.watering_burst_duration_seconds <= 0:
+            raise ValueError(
+                "GATEWAY_WATERING_BURST_DURATION_SECONDS는 0보다 커야 합니다."
+            )
         if self.serial_baud <= 0:
             raise ValueError("GATEWAY_SERIAL_BAUD는 0보다 커야 합니다.")
         if self.serial_timeout_seconds <= 0:
@@ -200,6 +253,15 @@ class GatewayConfig:
             "stability_window_size": self.stability_window_size,
             "stability_max_range_g": self.stability_max_range_g,
             "emit_interval_seconds": self.emit_interval_seconds,
+            "watering_detection_enabled": self.watering_detection_enabled,
+            "watering_min_increase_g": self.watering_min_increase_g,
+            "watering_confirm_seconds": self.watering_confirm_seconds,
+            "watering_burst_interval_seconds": (
+                self.watering_burst_interval_seconds
+            ),
+            "watering_burst_duration_seconds": (
+                self.watering_burst_duration_seconds
+            ),
             "serial_port": self.serial_port,
             "serial_baud": self.serial_baud,
             "raw_calibration_configured": (
