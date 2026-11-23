@@ -10,16 +10,11 @@ $PyInstallerRoot = Join-Path $BuildRoot "pyinstaller"
 $ReleaseRoot = Join-Path $PSScriptRoot "release"
 $PackageRoot = Join-Path $ReleaseRoot "PlanTalk-Sensor-Gateway"
 $ZipPath = Join-Path $ReleaseRoot "PlanTalk-Sensor-Gateway-Windows.zip"
-$ConfigPath = Join-Path $PSScriptRoot ".env.gateway"
 $EntryPath = Join-Path $PSScriptRoot "desktop_entry.py"
 
 if (-not (Test-Path -LiteralPath $Python)) {
   throw "Python 3.11 실행 파일을 찾지 못했습니다: $Python"
 }
-if (-not (Test-Path -LiteralPath $ConfigPath)) {
-  throw "비공개 설정 파일이 없습니다: $ConfigPath"
-}
-
 New-Item -ItemType Directory -Path $BuildRoot -Force | Out-Null
 if (-not (Test-Path -LiteralPath (Join-Path $VenvRoot "Scripts\python.exe"))) {
   & $Python -m venv $VenvRoot
@@ -30,6 +25,9 @@ $VenvPython = Join-Path $VenvRoot "Scripts\python.exe"
   -r (Join-Path $PSScriptRoot "requirements.txt") `
   "pyinstaller>=6.11,<7.0"
 
+if (Test-Path -LiteralPath $PackageRoot) {
+  Remove-Item -LiteralPath $PackageRoot -Recurse -Force
+}
 New-Item -ItemType Directory -Path $PackageRoot -Force | Out-Null
 $DistRoot = Join-Path $PyInstallerRoot "dist"
 $WorkRoot = Join-Path $PyInstallerRoot "work"
@@ -58,9 +56,6 @@ finally {
 Copy-Item -LiteralPath (
   Join-Path $PyInstallerRoot "dist\PlanTalk-Sensor-Gateway.exe"
 ) -Destination (Join-Path $PackageRoot "PlanTalk-Sensor-Gateway.exe") -Force
-Copy-Item -LiteralPath $ConfigPath -Destination (
-  Join-Path $PackageRoot ".env.gateway"
-) -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "TEAM_README.txt") `
   -Destination (Join-Path $PackageRoot "사용안내.txt") -Force
 
@@ -69,7 +64,6 @@ if (Test-Path -LiteralPath $ZipPath) {
 }
 $PackageFiles = @(
   (Join-Path $PackageRoot "PlanTalk-Sensor-Gateway.exe"),
-  (Join-Path $PackageRoot ".env.gateway"),
   (Join-Path $PackageRoot "사용안내.txt")
 )
 Compress-Archive -LiteralPath $PackageFiles -DestinationPath $ZipPath
