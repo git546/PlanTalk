@@ -74,7 +74,10 @@ class GatewayController:
             port=port,
             baud=9600,
             reconnect_seconds=0,
-            max_samples=count,
+            # Opening an Arduino port commonly produces one boot/status record.
+            # Allow extra valid records, but finish only after `count` load-cell
+            # values have actually been collected.
+            max_samples=count + 10,
             diagnostic=lambda message: self.emit("log", message),
         )
         values: list[float] = []
@@ -90,8 +93,12 @@ class GatewayController:
                         "light_raw": sample.raw_payload.get("light_raw"),
                         "temperature_c": sample.temperature_c,
                         "humidity_percent": sample.humidity_percent,
+                        "sensor_status": sample.sensor_status,
+                        "hx711_ready": sample.hx711_ready,
                     },
                 )
+                if len(values) >= count:
+                    break
         if len(values) < count:
             raise RuntimeError("로드셀 원본값을 충분히 받지 못했습니다.")
         result = float(median(values))

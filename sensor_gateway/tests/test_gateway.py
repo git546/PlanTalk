@@ -5,6 +5,7 @@ from io import StringIO
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from sensor_gateway.adapters import (
     JsonLinesAdapter,
@@ -16,6 +17,7 @@ from sensor_gateway.adapters import (
 from sensor_gateway.adaptive_sampling import AdaptiveSamplingPolicy
 from sensor_gateway.cli import calculate_calibration
 from sensor_gateway.config import GatewayConfig
+from sensor_gateway.desktop.controller import GatewayController
 from sensor_gateway.models import CareEvent, FieldMapping, RawSample
 from sensor_gateway.service import GatewayService
 from sensor_gateway.stability import StabilityFilter
@@ -51,6 +53,34 @@ class FakeSerial:
 
 
 class GatewayTests(unittest.TestCase):
+    def test_calibration_ignores_boot_record_and_collects_raw_values(self) -> None:
+        samples = [
+            RawSample(
+                captured_at="2026-11-25T00:00:00+00:00",
+                weight_g=None,
+                sensor_status="boot",
+                hx711_ready=False,
+            )
+        ]
+        samples.extend(
+            RawSample(
+                captured_at=f"2026-11-25T00:00:{index:02d}+00:00",
+                weight_g=None,
+                raw_sensor_value=float(100 + index),
+                sensor_status="ok",
+                hx711_ready=True,
+            )
+            for index in range(1, 21)
+        )
+        controller = GatewayController()
+        with patch(
+            "sensor_gateway.desktop.controller.SerialJsonLinesAdapter",
+            return_value=samples,
+        ) as adapter_class:
+            result = controller.measure_raw("COM3", count=20)
+        self.assertEqual(result, 110.5)
+        self.assertEqual(adapter_class.call_args.kwargs["max_samples"], 30)
+
     @staticmethod
     def _measurement(at: str, weight_g: float, sequence_no: int):
         from sensor_gateway.models import NormalizedMeasurement
