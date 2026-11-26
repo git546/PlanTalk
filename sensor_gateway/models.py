@@ -126,6 +126,10 @@ class RawSample:
     def has_load_cell_value(self) -> bool:
         return self.weight_g is not None or self.raw_sensor_value is not None
 
+    @property
+    def has_nonpositive_weight(self) -> bool:
+        return self.weight_g is not None and self.weight_g <= 0
+
     def validate(self) -> None:
         if not self.sensor_status.strip():
             raise ValueError("status는 빈 문자열일 수 없습니다.")
@@ -135,8 +139,6 @@ class RawSample:
             )
         if self.sensor_status == "ok" and self.hx711_ready is False:
             raise ValueError("status=ok인데 hx711_ready=false일 수 없습니다.")
-        if self.weight_g is not None and self.weight_g <= 0:
-            raise ValueError("weight_g는 0보다 커야 합니다.")
         if self.humidity_percent is not None and not 0 <= self.humidity_percent <= 100:
             raise ValueError("humidity_percent는 0~100 범위여야 합니다.")
         if self.light_lux is not None and self.light_lux < 0:

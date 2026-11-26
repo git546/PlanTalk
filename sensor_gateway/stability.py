@@ -64,6 +64,9 @@ class StabilityFilter:
         *,
         generated_sequence_no: int,
     ) -> Optional[NormalizedMeasurement]:
+        if sample.has_nonpositive_weight:
+            self.reset()
+            return None
         if not sample.has_load_cell_value or sample.sensor_status != "ok":
             return None
         self.samples.append(sample)

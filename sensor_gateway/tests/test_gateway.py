@@ -53,6 +53,43 @@ class FakeSerial:
 
 
 class GatewayTests(unittest.TestCase):
+    def test_nonpositive_calibrated_weights_are_logged_and_collection_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = GatewayConfig(
+                db_path=Path(temp_dir) / "gateway.sqlite3",
+                raw_zero_value=1000,
+                raw_grams_per_unit=-0.1,
+                stability_window_size=2,
+            )
+            store = GatewayStore(config.db_path)
+            uploader = FakeUploader()
+            messages = []
+            samples = [
+                RawSample(
+                    captured_at=f"2026-11-26T00:00:{index:02d}+00:00",
+                    weight_g=None,
+                    raw_sensor_value=raw,
+                )
+                for index, raw in enumerate((900, 1000, 1010, 900, 900))
+            ]
+            summary = GatewayService(config, store, uploader, diagnostic=messages.append).run(
+                samples, upload=True,
+            )
+
+            self.assertEqual(summary.raw_samples, 5)
+            self.assertEqual(summary.status_samples, 2)
+            with store.connect() as connection:
+                stored_weights = connection.execute(
+                    "select weight_g from raw_samples order by id"
+                ).fetchall()
+            self.assertEqual([row["weight_g"] for row in stored_weights], [10, 0, -1, 10, 10])
+            self.assertEqual([row.weight_g for row in uploader.measurements], [10])
+            self.assertEqual(uploader.measurements[0].measured_at, samples[-1].captured_at)
+            event_types = [event.event_type for event in uploader.gateway_events]
+            self.assertEqual(event_types.count("weight_nonpositive"), 1)
+            self.assertEqual(event_types.count("weight_recovered"), 1)
+            self.assertEqual(len(messages), 2)
+
     def test_calibration_ignores_boot_record_and_collects_raw_values(self) -> None:
         samples = [
             RawSample(

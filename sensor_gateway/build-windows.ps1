@@ -24,11 +24,10 @@ $VenvPython = Join-Path $VenvRoot "Scripts\python.exe"
 & $VenvPython -m pip install --disable-pip-version-check `
   -r (Join-Path $PSScriptRoot "requirements.txt") `
   "pyinstaller>=6.11,<7.0"
-
-if (Test-Path -LiteralPath $PackageRoot) {
-  Remove-Item -LiteralPath $PackageRoot -Recurse -Force
+if ($LASTEXITCODE -ne 0) {
+  throw '게이트웨이 빌드 의존성 설치에 실패했습니다.'
 }
-New-Item -ItemType Directory -Path $PackageRoot -Force | Out-Null
+
 $DistRoot = Join-Path $PyInstallerRoot "dist"
 $WorkRoot = Join-Path $PyInstallerRoot "work"
 $SpecRoot = Join-Path $PyInstallerRoot "spec"
@@ -48,25 +47,26 @@ try {
     --workpath $WorkRoot `
     --specpath $SpecRoot `
     $EntryPath
+  if ($LASTEXITCODE -ne 0) {
+    throw '게이트웨이 실행 파일 빌드에 실패했습니다.'
+  }
 }
 finally {
   Pop-Location
 }
 
+New-Item -ItemType Directory -Path $PackageRoot -Force | Out-Null
 Copy-Item -LiteralPath (
   Join-Path $PyInstallerRoot "dist\PlanTalk-Sensor-Gateway.exe"
 ) -Destination (Join-Path $PackageRoot "PlanTalk-Sensor-Gateway.exe") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "TEAM_README.txt") `
   -Destination (Join-Path $PackageRoot "사용안내.txt") -Force
 
-if (Test-Path -LiteralPath $ZipPath) {
-  Remove-Item -LiteralPath $ZipPath -Force
-}
 $PackageFiles = @(
   (Join-Path $PackageRoot "PlanTalk-Sensor-Gateway.exe"),
   (Join-Path $PackageRoot "사용안내.txt")
 )
-Compress-Archive -LiteralPath $PackageFiles -DestinationPath $ZipPath
+Compress-Archive -LiteralPath $PackageFiles -DestinationPath $ZipPath -Force
 
 Write-Output "Release folder: $PackageRoot"
 Write-Output "Release zip: $ZipPath"

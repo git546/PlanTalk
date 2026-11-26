@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Iterable, Optional, Protocol
+from typing import Callable, Iterable, Optional, Protocol
 from uuid import uuid4
 
 from .adaptive_sampling import AdaptiveSamplingPolicy
@@ -45,10 +45,13 @@ class GatewayService:
         config: GatewayConfig,
         store: GatewayStore,
         uploader: Optional[RemoteUploader] = None,
+        *,
+        diagnostic: Optional[Callable[[str], None]] = None,
     ) -> None:
         self.config = config
         self.store = store
         self.uploader = uploader
+        self.diagnostic = diagnostic
         self.filter = StabilityFilter(
             window_size=config.stability_window_size,
             max_range_g=config.stability_max_range_g,
@@ -216,6 +219,7 @@ class GatewayService:
         duplicates = 0
         sent = 0
         failed = 0
+        waiting_for_positive_weight = False
         self.record_gateway_event("gateway_run_started")
         try:
             for sample in samples:
@@ -227,7 +231,33 @@ class GatewayService:
                 generated_sequence = self.store.next_sequence(
                     self.config.external_device_id
                 )
-                if not sample.has_load_cell_value or sample.sensor_status != "ok":
+                nonpositive_weight = sample.has_nonpositive_weight
+                if sample.sensor_status == "ok" and sample.weight_g is not None:
+                    if nonpositive_weight and not waiting_for_positive_weight:
+                        self.record_gateway_event(
+                            "weight_nonpositive",
+                            severity="warning",
+                            occurred_at=sample.captured_at,
+                            details={"weight_g": sample.weight_g},
+                        )
+                        if self.diagnostic:
+                            self.diagnostic(
+                                "보정 무게가 0g 이하입니다. 화분과 영점을 확인해 주세요. "
+                                "센서 수집은 계속합니다."
+                            )
+                    elif waiting_for_positive_weight and not nonpositive_weight:
+                        self.record_gateway_event(
+                            "weight_recovered", occurred_at=sample.captured_at,
+                        )
+                        if self.diagnostic:
+                            self.diagnostic("양수 무게를 다시 수신했습니다. 안정값을 계산합니다.")
+                    waiting_for_positive_weight = nonpositive_weight
+
+                if (
+                    nonpositive_weight
+                    or not sample.has_load_cell_value
+                    or sample.sensor_status != "ok"
+                ):
                     status_count += 1
                     self._reset_sampling()
                     if upload and self.uploader is not None:

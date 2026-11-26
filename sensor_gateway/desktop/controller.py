@@ -146,7 +146,9 @@ class GatewayController:
         config.validate_remote() if upload else config.validate_local()
         store = GatewayStore(config.db_path)
         uploader = SupabaseGatewayClient(config) if upload else None
-        service = GatewayService(config, store, uploader)
+        service = GatewayService(
+            config, store, uploader, diagnostic=lambda message: self.emit("log", message),
+        )
 
         adapter = SerialJsonLinesAdapter(
             port=port,
