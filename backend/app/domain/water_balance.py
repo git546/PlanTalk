@@ -3,6 +3,7 @@ from typing import Literal
 
 WaterStatus = Literal["hydrated", "monitor", "water_soon", "water_now"]
 Confidence = Literal["low", "medium", "high"]
+WeightStatus = Literal["hydrated", "monitor", "water_now"]
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,17 @@ def _rounded(value: float) -> float:
     return round(value, 2)
 
 
+def assess_current_weight(
+    weight_g: float, trigger_g: float, target_g: float, max_watering_ml: float | None,
+) -> tuple[WeightStatus, float, float]:
+    """Return the threshold status, target deficit and capped refill from a single weight."""
+    deficit = max(target_g - weight_g, 0)
+    if weight_g <= trigger_g:
+        refill = deficit if max_watering_ml is None else min(deficit, max_watering_ml)
+        return "water_now", deficit, refill
+    return ("hydrated" if weight_g >= target_g else "monitor"), deficit, 0.0
+
+
 def calculate(input_data: WaterBalanceInput) -> WaterBalanceCalculation:
     """Calculate water balance without knowing how measurements were collected."""
 
@@ -71,37 +83,22 @@ def calculate(input_data: WaterBalanceInput) -> WaterBalanceCalculation:
         if input_data.water_added_ml > 0
         else None
     )
-    refill_to_target = max(input_data.target_wet_weight_g - input_data.end_pot_weight_g, 0)
-
-    if input_data.end_pot_weight_g <= input_data.watering_trigger_weight_g:
-        status: WaterStatus = "water_now"
-        recommended_now = refill_to_target
+    weight_status, refill_to_target, recommended_now = assess_current_weight(
+        input_data.end_pot_weight_g, input_data.watering_trigger_weight_g,
+        input_data.target_wet_weight_g, input_data.max_single_watering_ml,
+    )
+    status: WaterStatus = weight_status
+    if status == "water_now":
         days_until_watering = 0.0
-    elif input_data.end_pot_weight_g >= input_data.target_wet_weight_g:
-        status = "hydrated"
-        recommended_now = 0.0
-        days_until_watering = (
-            (input_data.end_pot_weight_g - input_data.watering_trigger_weight_g)
-            / average_daily_loss
-            if average_daily_loss > 0
-            else None
-        )
     else:
-        recommended_now = 0.0
         days_until_watering = (
             (input_data.end_pot_weight_g - input_data.watering_trigger_weight_g)
             / average_daily_loss
             if average_daily_loss > 0
             else None
         )
-        status = (
-            "water_soon"
-            if days_until_watering is not None and days_until_watering <= 2
-            else "monitor"
-        )
-
-    if input_data.max_single_watering_ml is not None:
-        recommended_now = min(recommended_now, input_data.max_single_watering_ml)
+        if status == "monitor" and days_until_watering is not None and days_until_watering <= 2:
+            status = "water_soon"
 
     if warnings:
         confidence: Confidence = "low" if raw_water_loss < 0 else "medium"

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { HomeWateringCard } from '@/components/home-watering-card';
 import { useAuth } from '@/context/auth';
 import { useConversation } from '@/context/conversation';
 import { usePlantCatalog } from '@/context/plant-catalog';
@@ -64,7 +65,7 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View>
             <Text style={styles.brand}>PLANTALK</Text>
@@ -115,6 +116,14 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
         </View>
+
+        {!plantsLoading && session && selectedPlant && (
+          <HomeWateringCard
+            key={`${session.user.id}/${selectedPlant.id}`}
+            userId={session.user.id}
+            plantId={selectedPlant.id}
+          />
+        )}
 
         <View style={styles.sectionHeading}>
           <Text accessibilityRole="header" style={styles.sectionTitle}>최근 대화</Text>

@@ -27,10 +27,14 @@ async def prepare_chat_context(
         return None, None, []
     try:
         plant_id = await get_or_create_plant(user_id, access_token, plant, settings)
-        stored_memories = await load_memories(plant_id, access_token, settings)
     except (DataStoreError, httpx.RequestError, OSError) as exc:
         logger.warning("Could not prepare conversation memory: %s", exc)
         return plant, None, []
+    try:
+        stored_memories = await load_memories(plant_id, access_token, settings)
+    except (DataStoreError, httpx.RequestError, OSError) as exc:
+        logger.warning("Could not load conversation memory: %s", exc)
+        return plant, plant_id, []
 
     contents: list[str] = []
     seen: set[str] = set()

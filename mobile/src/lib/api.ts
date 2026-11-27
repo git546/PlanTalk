@@ -4,6 +4,44 @@ const DEFAULT_API_URL = 'http://localhost:8000';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL;
 
+function apiErrorMessage(response: Response, fallback: string): string {
+  if (response.redirected || response.status === 401 || response.status === 403) {
+    return '접속 권한을 확인할 수 없어요. 페이지를 다시 열고 로그인해 주세요.';
+  }
+  if (response.status === 504 || response.status === 524) {
+    return '서버 응답 시간이 초과됐어요. 잠시 후 다시 시도해 주세요.';
+  }
+  if (response.status >= 500) {
+    return '서버 연결에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  }
+  if (response.ok) {
+    return '서버 응답을 읽을 수 없어요. 페이지를 다시 열고 다시 시도해 주세요.';
+  }
+  return fallback;
+}
+
+async function readApiResponse(response: Response, fallback: string): Promise<unknown> {
+  const contentType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+  const errorMessage = apiErrorMessage(response, fallback);
+  if (contentType !== 'application/json' && !contentType?.endsWith('+json')) {
+    throw new Error(errorMessage);
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new Error(errorMessage);
+  }
+
+  if (!response.ok) {
+    const detail = data && typeof data === 'object' && 'detail' in data ? data.detail : null;
+    throw new Error(typeof detail === 'string' && detail.trim() ? detail : errorMessage);
+  }
+  return data;
+}
+
 export type HealthResponse = {
   status: 'ok';
   service: string;
@@ -11,13 +49,10 @@ export type HealthResponse = {
 };
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const response = await fetch(`${API_URL}/api/health`);
-
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
-  }
-
-  return response.json() as Promise<HealthResponse>;
+  const response = await fetch(`${API_URL}/api/health`, {
+    headers: { Accept: 'application/json' },
+  });
+  return (await readApiResponse(response, '서버 상태를 확인하지 못했어요.')) as HealthResponse;
 }
 
 export type SpeciesReference = {
@@ -61,12 +96,9 @@ export async function fetchSpeciesReference(
   if (plantId) params.set('plant_id', plantId);
   if (refresh) params.set('refresh', 'true');
   const response = await fetch(`${API_URL}/api/species-reference?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
   });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(typeof data.detail === 'string' ? data.detail : '식물 참고 정보를 찾지 못했습니다.');
-  }
+  const data = await readApiResponse(response, '식물 참고 정보를 찾지 못했습니다.');
   return data as SpeciesReferenceResponse;
 }
 
@@ -94,6 +126,14 @@ export type PlantContext = {
   memories?: string[];
 };
 
+function deviceTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchReply(messages: ChatMessage[], plant?: PlantContext): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
@@ -104,17 +144,16 @@ export async function fetchReply(messages: ChatMessage[], plant?: PlantContext):
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
       headers: {
+        Accept: 'application/json',
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ messages, ...(plant ? { plant } : {}) }),
+      body: JSON.stringify({ messages, time_zone: deviceTimeZone(), ...(plant ? { plant } : {}) }),
       signal: controller.signal,
     });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(typeof data.detail === 'string' ? data.detail : '메시지를 보내지 못했어요. 다시 시도해 주세요.');
-    }
-    if (typeof data.reply !== 'string' || !data.reply.trim()) {
+    const data = await readApiResponse(response, '메시지를 보내지 못했어요. 다시 시도해 주세요.');
+    if (!data || typeof data !== 'object' || !('reply' in data)
+      || typeof data.reply !== 'string' || !data.reply.trim()) {
       throw new Error('답변이 비어 있어요. 다시 시도해 주세요.');
     }
     return data.reply;
@@ -168,15 +207,12 @@ export async function fetchWaterBalance(
   const response = await fetch(`${API_URL}/api/water-balance`, {
     method: 'POST',
     headers: {
+      Accept: 'application/json',
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(request),
   });
-  const data = await response.json();
-  if (!response.ok) {
-    const detail = typeof data.detail === 'string' ? data.detail : null;
-    throw new Error(detail ?? '수분량을 계산하지 못했어요. 입력값을 확인해 주세요.');
-  }
+  const data = await readApiResponse(response, '수분량을 계산하지 못했어요. 입력값을 확인해 주세요.');
   return data as WaterBalanceResponse;
 }

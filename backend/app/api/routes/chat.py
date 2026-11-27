@@ -1,3 +1,5 @@
+from asyncio import gather
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
@@ -7,7 +9,9 @@ from app.core.config import get_settings
 from app.schemas.persona import PlantContext
 from app.services.auth import AuthenticatedUser, AuthError, authenticate
 from app.services.chat import ChatError, generate_reply
+from app.services.chat_time import ChatClock
 from app.services.conversation_memory import prepare_chat_context, remember_conversation
+from app.services.sensor_context import load_sensor_context
 from app.services.species_reference import enrich_plant_reference
 
 router = APIRouter(tags=["chat"])
@@ -28,6 +32,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[Message] = Field(min_length=1, max_length=21)
     plant: PlantContext | None = None
+    time_zone: str | None = Field(default=None, max_length=100)
 
 
 class ChatResponse(BaseModel):
@@ -59,6 +64,7 @@ async def chat(
         raise HTTPException(422, "대화 순서가 올바르지 않습니다.")
     if roles[-1] != "user":
         raise HTTPException(422, "마지막 메시지는 사용자 메시지여야 합니다.")
+    clock = ChatClock.from_request(request.time_zone, datetime.now(UTC))
     settings = get_settings()
     plant, plant_id, stored_memories = await prepare_chat_context(
         user.id,
@@ -66,17 +72,19 @@ async def chat(
         request.plant,
         settings,
     )
-    plant = await enrich_plant_reference(
-        plant,
-        settings,
-        plant_id=plant_id,
-        access_token=access_token,
+    # Without an explicit selection, the persona/memory fallback can resolve a default plant.
+    sensor_plant_id = plant_id if request.plant and request.plant.id == plant_id else None
+    plant, sensor_context = await gather(
+        enrich_plant_reference(plant, settings, plant_id=plant_id, access_token=access_token),
+        load_sensor_context(sensor_plant_id, access_token, settings, now=clock.now),
     )
     try:
         reply = await generate_reply(
             [m.model_dump() for m in request.messages],
             settings,
             plant=plant,
+            sensor_context=sensor_context,
+            clock=clock,
         )
     except ChatError as exc:
         raise HTTPException(exc.status, str(exc)) from None

@@ -30,10 +30,6 @@ export default function ChatScreen() {
   const conversation = useRef<ScrollView>(null);
   const chatPlantName = selectedPlant?.name ?? profile.name;
   const chatPlantSpecies = selectedPlant?.species ?? profile.species;
-  const isCalibrated = !!selectedPlant
-    && selectedPlant.setupWeightG !== null
-    && selectedPlant.targetWetWeightG !== null
-    && selectedPlant.wateringTriggerWeightG !== null;
 
   async function sendMessage() {
     const text = draft.trim();
@@ -103,14 +99,14 @@ export default function ChatScreen() {
 
         <View style={styles.contextBar}>
           <AppIcon
-            color={isCalibrated ? colors.brand : colors.warningText}
-            name={isCalibrated ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+            color={colors.textSecondary}
+            name="information-circle-outline"
             size={18}
           />
           <Text style={styles.contextText}>
-            {isCalibrated
-              ? '화분 기준값이 대화의 보조 정보로 연결되어 있어요.'
-              : '초기 무게 기준이 없어 현재는 대화 기록 중심으로 답해요.'}
+            {selectedPlant
+              ? '최근 센서 기록이 있으면 답변에 참고해요.'
+              : '식물을 선택하면 그 식물의 센서 기록을 참고할 수 있어요.'}
           </Text>
         </View>
 

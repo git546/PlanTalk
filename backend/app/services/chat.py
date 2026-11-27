@@ -3,6 +3,7 @@ import httpx
 
 from app.core.config import Settings
 from app.schemas.persona import PlantContext
+from app.services.chat_time import ChatClock
 from app.services.persona import build_system_instruction
 
 
@@ -16,13 +17,20 @@ async def generate_reply(
     messages: list[dict[str, str]],
     settings: Settings,
     plant: PlantContext | None = None,
+    *,
+    sensor_context: dict[str, object] | None = None,
+    clock: ChatClock | None = None,
 ) -> str:
     if settings.ai_provider != "gemini":
         raise ChatError("아직 지원하지 않는 AI 서비스 설정입니다.", 503)
     if not settings.gemini_api_key or not settings.gemini_api_key.get_secret_value().strip():
         raise ChatError("서버에 Gemini API 키를 설정한 뒤 서버를 다시 시작해 주세요.", 503)
     payload = {
-        "systemInstruction": {"parts": [{"text": build_system_instruction(plant)}]},
+        "systemInstruction": {
+            "parts": [{
+                "text": build_system_instruction(plant, sensor_context=sensor_context, clock=clock),
+            }],
+        },
         "contents": [
             {"role": "model" if m["role"] == "assistant" else "user",
              "parts": [{"text": m["content"]}]} for m in messages
