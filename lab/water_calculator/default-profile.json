@@ -1,0 +1,9 @@
+{
+  "name": "기본값",
+  "water_density_g_per_ml": 1.0,
+  "loss_scale": 1.0,
+  "loss_bias_ml": 0.0,
+  "recommendation_scale": 1.0,
+  "trigger_margin_g": 0.0,
+  "version": 1
+}
